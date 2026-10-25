@@ -91,6 +91,22 @@ export class BootScene extends Phaser.Scene {
       'crop_wheat_4',
       'keep_fences',
       'keep_garden',
+      'flowerbed_gold',
+      'flowerbed_blue',
+      'flowerbed_violet',
+      'reeds',
+      'reeds_2',
+      'lilypad',
+      'lilypad_flower',
+      'woodpile',
+      'chopping_block',
+      'barrel_water',
+      'bucket_water',
+      'sign_smith',
+      'sign_inn',
+      'lantern_post',
+      'crate_apples',
+      'basket_bread',
     ];
     for (const p of props) {
       this.load.image(p, `/assets/props/${p}.png`);
@@ -181,6 +197,137 @@ export class BootScene extends Phaser.Scene {
           });
         }
       }
+    }
+
+    // =========================================================================
+    // 16-Bit Living Fauna Animations (Stardew 32x32 / 16x16 Standard)
+    // =========================================================================
+    const anim4 = (key: string, tex: string, start: number, fps = 6) => {
+      if (!this.anims.exists(key) && this.textures.exists(tex)) {
+        this.anims.create({
+          key,
+          frames: this.anims.generateFrameNumbers(tex, { start, end: start + 3 }),
+          frameRate: fps,
+          repeat: -1,
+        });
+      }
+    };
+
+    // Cattle (cow_brown, calf_brown)
+    anim4('cow-walk-down', 'cow_brown', 0, 5);
+    anim4('cow-walk-right', 'cow_brown', 4, 5);
+    anim4('cow-walk-up', 'cow_brown', 8, 5);
+    anim4('cow-graze', 'cow_brown', 12, 3);
+    if (!this.anims.exists('cow-idle') && this.textures.exists('cow_brown')) {
+      this.anims.create({ key: 'cow-idle', frames: [{ key: 'cow_brown', frame: 4 }], frameRate: 1 });
+    }
+
+    anim4('calf-walk-down', 'calf_brown', 0, 6);
+    anim4('calf-walk-right', 'calf_brown', 4, 6);
+    anim4('calf-walk-up', 'calf_brown', 8, 6);
+    anim4('calf-graze', 'calf_brown', 12, 4);
+    if (!this.anims.exists('calf-idle') && this.textures.exists('calf_brown')) {
+      this.anims.create({ key: 'calf-idle', frames: [{ key: 'calf_brown', frame: 4 }], frameRate: 1 });
+    }
+
+    // Sheep & Lamb (sheep, sheep_baby)
+    anim4('sheep-walk-down', 'sheep', 0, 5);
+    anim4('sheep-walk-right', 'sheep', 4, 5);
+    anim4('sheep-walk-up', 'sheep', 8, 5);
+    anim4('sheep-graze', 'sheep', 12, 3);
+    if (!this.anims.exists('sheep-idle') && this.textures.exists('sheep')) {
+      this.anims.create({ key: 'sheep-idle', frames: [{ key: 'sheep', frame: 4 }], frameRate: 1 });
+    }
+
+    anim4('sheep-baby-walk-down', 'sheep_baby', 0, 6);
+    anim4('sheep-baby-walk-right', 'sheep_baby', 4, 6);
+    anim4('sheep-baby-walk-up', 'sheep_baby', 8, 6);
+    anim4('sheep-baby-graze', 'sheep_baby', 12, 4);
+    if (!this.anims.exists('sheep-baby-idle') && this.textures.exists('sheep_baby')) {
+      this.anims.create({ key: 'sheep-baby-idle', frames: [{ key: 'sheep_baby', frame: 4 }], frameRate: 1 });
+    }
+
+    // Pig & Piglet (pig, piglet)
+    anim4('pig-walk-down', 'pig', 0, 5);
+    anim4('pig-walk-right', 'pig', 4, 5);
+    anim4('pig-walk-up', 'pig', 8, 5);
+    anim4('pig-forage', 'pig', 12, 4);
+    if (!this.anims.exists('pig-idle') && this.textures.exists('pig')) {
+      this.anims.create({ key: 'pig-idle', frames: [{ key: 'pig', frame: 4 }], frameRate: 1 });
+    }
+
+    anim4('piglet-walk-down', 'piglet', 0, 6);
+    anim4('piglet-walk-right', 'piglet', 4, 6);
+    anim4('piglet-walk-up', 'piglet', 8, 6);
+    anim4('piglet-forage', 'piglet', 12, 5);
+    if (!this.anims.exists('piglet-idle') && this.textures.exists('piglet')) {
+      this.anims.create({ key: 'piglet-idle', frames: [{ key: 'piglet', frame: 4 }], frameRate: 1 });
+    }
+
+    // Horse
+    if (!this.anims.exists('horse-idle') && this.textures.exists('horse')) {
+      this.anims.create({
+        key: 'horse-idle',
+        frames: this.anims.generateFrameNumbers('horse', { start: 0, end: 3 }),
+        frameRate: 3,
+        repeat: -1,
+      });
+      this.anims.create({
+        key: 'horse-walk',
+        frames: this.anims.generateFrameNumbers('horse', { start: 14, end: 17 }),
+        frameRate: 6,
+        repeat: -1,
+      });
+      this.anims.create({
+        key: 'horse-graze',
+        frames: this.anims.generateFrameNumbers('horse', { start: 0, end: 2 }),
+        frameRate: 2,
+        repeat: -1,
+      });
+    }
+
+    // Poultry (chicken_brown, chick_dark)
+    anim4('chicken-walk-right', 'chicken_brown', 4, 6);
+    anim4('chicken-peck', 'chicken_brown', 12, 4);
+    if (!this.anims.exists('chicken-idle') && this.textures.exists('chicken_brown')) {
+      this.anims.create({ key: 'chicken-idle', frames: [{ key: 'chicken_brown', frame: 4 }], frameRate: 1 });
+    }
+
+    anim4('chick-walk-right', 'chick_dark', 4, 7);
+    anim4('chick-peck', 'chick_dark', 12, 5);
+    if (!this.anims.exists('chick-idle') && this.textures.exists('chick_dark')) {
+      this.anims.create({ key: 'chick-idle', frames: [{ key: 'chick_dark', frame: 4 }], frameRate: 1 });
+    }
+
+    // Duck
+    if (!this.anims.exists('duck-swim') && this.textures.exists('duck')) {
+      this.anims.create({
+        key: 'duck-swim',
+        frames: this.anims.generateFrameNumbers('duck', { start: 12, end: 15 }),
+        frameRate: 4,
+        repeat: -1,
+      });
+      this.anims.create({
+        key: 'duck-idle',
+        frames: [{ key: 'duck', frame: 12 }],
+        frameRate: 1,
+      });
+    }
+
+    // Critters: River Frogs (Frames 280..283 idle/croak, 284..286 jump)
+    if (!this.anims.exists('frog-croak') && this.textures.exists('critters')) {
+      this.anims.create({
+        key: 'frog-croak',
+        frames: this.anims.generateFrameNumbers('critters', { start: 280, end: 283 }),
+        frameRate: 4,
+        repeat: -1,
+      });
+      this.anims.create({
+        key: 'frog-jump',
+        frames: this.anims.generateFrameNumbers('critters', { start: 284, end: 286 }),
+        frameRate: 6,
+        repeat: 0,
+      });
     }
   }
 }

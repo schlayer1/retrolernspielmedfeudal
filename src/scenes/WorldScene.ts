@@ -74,7 +74,16 @@ export class WorldScene extends Phaser.Scene {
     this.chapterBanner = new ChapterBanner();
     this.companionManager = new CompanionManager(this);
 
-    // 3. Setup Controls
+    // 3. Dense Ground Flora Scattering (150+ grass tufts, wildflowers, pebbles, mushrooms)
+    this.scatterGroundFlora();
+
+    // 4. Living River Shores & Water Infrastructure
+    this.buildRiverShores();
+
+    // 5. Border Trees & Streuobstwiese
+    this.placeBorderTrees();
+
+    // 6. Setup Controls
     if (this.input.keyboard) {
       this.cursors = this.input.keyboard.createCursorKeys();
       this.wasd = {
@@ -86,39 +95,39 @@ export class WorldScene extends Phaser.Scene {
       };
     }
 
-    // 4. Place Static Decor & Architecture
+    // 7. Place Static Decor & Architecture
     this.placeWorldDecor();
 
-    // 5. Place Resource Hotspots
+    // 8. Place Resource Hotspots
     this.placeResourceNodes();
 
-    // 6. Spawn Player
+    // 9. Spawn Player
     this.player = this.add.sprite(gameState.playerX, gameState.playerY, 'character', 0);
     this.player.setOrigin(0.5, 0.9);
     this.player.setScale(1.0);
     this.player.setDepth(this.player.y);
 
-    // 7. Setup Camera
+    // 10. Setup Camera
     this.cameras.main.setBounds(0, 0, this.mapW * 16, this.mapH * 16);
     this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
     this.cameras.main.setZoom(2.2);
 
-    // 8. Setup Interactive Targets & Mentors
+    // 11. Setup Interactive Targets & Mentors
     this.setupTargets();
 
-    // 9. Init Wildlife & Living World
+    // 12. Init Wildlife & Living World
     this.wildlifeManager.init();
     this.livingWorldManager.initWaterEffects(50 * 16, 54 * 16, 4 * 16, 76 * 16);
 
-    // 10. Fire & Smoke on Forges & Braziers
+    // 13. Fire & Smoke on Forges & Braziers
     this.livingWorldManager.registerFireSource(36 * 16, 52 * 16, true, 34, 0xffa533); // Schmiede
     this.livingWorldManager.registerFireSource(22 * 16, 16 * 16, true, 30, 0xff7722); // Burg-Kamin
     this.livingWorldManager.registerFireSource(24 * 16, 28 * 16, false, 24, 0xffaa44); // Burgtor-Fackel
 
-    // 11. Companion Unlock (Kapitel 1)
+    // 14. Companion Unlock (Kapitel 1)
     this.companionManager.unlock(this.player.x - 20, this.player.y);
 
-    // 12. First Chapter Banner
+    // 15. First Chapter Banner
     this.lastBannerChapter = gameState.chapter;
     const curCh = MEDIEVAL_CHAPTERS.find((c) => c.id === gameState.chapter);
     if (curCh) {
@@ -129,7 +138,7 @@ export class WorldScene extends Phaser.Scene {
       });
     }
 
-    // 13. Single Proximity DOM Label
+    // 16. Single Proximity DOM Label
     this.initInteractionLabel();
 
     // Subscribe to state changes (building erections, chapter advances)
@@ -147,27 +156,58 @@ export class WorldScene extends Phaser.Scene {
     const texKey = 'medieval_baked_ground';
     if (this.textures.exists(texKey)) return;
 
-    const canvasTex = this.textures.createCanvas(texKey, W, H)!;
-    const ctx = canvasTex.getContext();
-    const imgData = ctx.createImageData(W, H);
-    const dst = imgData.data;
+    // 1. Source Image Data from ground_a2 (RPG Maker MV 768x576)
+    const srcImg = this.textures.get('ground_a2').getSourceImage() as HTMLImageElement;
+    const srcCanvas = document.createElement('canvas');
+    srcCanvas.width = srcImg.width;
+    srcCanvas.height = srcImg.height;
+    const sctx = srcCanvas.getContext('2d')!;
+    sctx.drawImage(srcImg, 0, 0);
+    const srcData = sctx.getImageData(0, 0, srcImg.width, srcImg.height).data;
+    const sw = srcImg.width;
 
-    // Palette Colors (16-Bit Bayer Sampling)
-    // 0: Lush grass, 1: Deep forest grass, 2: Cobble stone, 3: Warm dirt road, 4: Sand shore, 5: Water
-    const colLush: [number, number, number] = [98, 148, 62];
-    const colDeep: [number, number, number] = [68, 112, 44];
-    const colStone: [number, number, number] = [142, 138, 130];
-    const colCastlePave: [number, number, number] = [170, 165, 155];
-    const colDirt: [number, number, number] = [178, 136, 88];
-    const colShore: [number, number, number] = [212, 184, 134];
-    const colWater: [number, number, number] = [62, 124, 184];
+    // 2. Source Image Data from Overworld (Classic 16-Bit SNES Water tile at 48,48)
+    const owImg = this.textures.get('Overworld').getSourceImage() as HTMLImageElement;
+    const owCanvas = document.createElement('canvas');
+    owCanvas.width = owImg.width;
+    owCanvas.height = owImg.height;
+    const owctx = owCanvas.getContext('2d')!;
+    owctx.drawImage(owImg, 0, 0);
+    const owData = owctx.getImageData(0, 0, owImg.width, owImg.height).data;
+    const oww = owImg.width;
 
+    // In RPG Maker MV A2 (768x576, 8x4 Blöcke à 96x144) liegt die 100% nahtlose
+    // 48x48-Innenkachel jedes Blocks exakt bei (bx*96 + 24, by*144 + 72).
+    const sampleBlock = (bx: number, by: number, x: number, y: number): [number, number, number] => {
+      const u = ((x % 48) + 48) % 48;
+      const v = ((y % 48) + 48) % 48;
+      const sx = bx * 96 + 24 + u;
+      const sy = by * 144 + 72 + v;
+      const idx = (sy * sw + sx) * 4;
+      return [srcData[idx], srcData[idx + 1], srcData[idx + 2]];
+    };
+
+    const sampleWater = (x: number, y: number): [number, number, number] => {
+      const u = ((x % 16) + 16) % 16;
+      const v = ((y % 16) + 16) % 16;
+      const sx = 48 + u;
+      const sy = 48 + v;
+      const idx = (sy * oww + sx) * 4;
+      return [owData[idx], owData[idx + 1], owData[idx + 2]];
+    };
+
+    // 4x4 Bayer-Dither-Matrix für authentische 16-Bit-Pixel-Übergänge
     const bayer4 = [
       [0 / 16, 8 / 16, 2 / 16, 10 / 16],
       [12 / 16, 4 / 16, 14 / 16, 6 / 16],
       [3 / 16, 11 / 16, 1 / 16, 9 / 16],
       [15 / 16, 7 / 16, 13 / 16, 5 / 16],
     ];
+
+    const canvasTex = this.textures.createCanvas(texKey, W, H)!;
+    const ctx = canvasTex.getContext();
+    const imgData = ctx.createImageData(W, H);
+    const dst = imgData.data;
 
     for (let y = 0; y < H; y += 2) {
       for (let x = 0; x < W; x += 2) {
@@ -179,52 +219,82 @@ export class WorldScene extends Phaser.Scene {
         const riverCenterX = 52 + Math.sin(ty * 0.12) * 2.5;
         const distRiver = Math.abs(tx - riverCenterX);
 
-        // Wooden Bridge at y: 39..42
+        // Wooden Bridge at y: 38.5..42.5
         const isBridge = distRiver < 3.2 && ty >= 38.5 && ty <= 42.5;
 
         // Roads
-        // Castle path: from (28, 28) to bridge (52, 40)
         const dCastleRoad = this.distToSegment(tx, ty, 28, 28, 50, 40);
-        // Village road: from (24, 56) to bridge (50, 40)
         const dVillageRoad = this.distToSegment(tx, ty, 26, 58, 50, 40);
-        // Monastery road: from bridge (54, 40) to (78, 22)
         const dKlosterRoad = this.distToSegment(tx, ty, 54, 40, 78, 22);
-        // Farm road: from bridge (54, 40) to (70, 56)
         const dFarmRoad = this.distToSegment(tx, ty, 54, 40, 70, 56);
-
         const minRoadDist = Math.min(dCastleRoad, dVillageRoad, dKlosterRoad, dFarmRoad);
 
-        // Castle Plateau (x: 14..38, y: 8..30)
+        // Castle Plateau (tx: 16..36, ty: 12..28)
         const inCastleCourt = tx >= 16 && tx <= 36 && ty >= 12 && ty <= 28;
+        // Monastery cloister (tx: 74..86, ty: 14..24)
+        const inMonasteryCourt = tx >= 74 && tx <= 86 && ty >= 14 && ty <= 24;
+
+        let bx = 1;
+        let by = 1;
+        let isWater = false;
+        let isBridgePlank = false;
+
+        if (isBridge) {
+          isBridgePlank = true;
+        } else if (distRiver < 2.0) {
+          isWater = true;
+        } else if (distRiver < 3.4 + dither * 0.8) {
+          // Warm sand / clay river shore
+          bx = 2;
+          by = 1;
+        } else if (inCastleCourt || inMonasteryCourt) {
+          // Grey flagstone / cobblestone paving
+          bx = 1;
+          by = 2;
+        } else if (minRoadDist < 1.6 + dither * 0.5) {
+          // Trodden dirt road
+          bx = 1;
+          by = 0;
+        } else {
+          // Multi-biome meadow / deep forest grass with organic Bayer waves
+          const wave = Math.sin(x * 0.022 + y * 0.018) * 0.5 + Math.cos(x * 0.015 - y * 0.025) * 0.5;
+          const borderBoost =
+            (x < 140 ? (140 - x) / 80 : 0) +
+            (y < 120 ? (120 - y) / 70 : 0) +
+            (x > W - 140 ? (x - (W - 140)) / 80 : 0) +
+            (y > H - 120 ? (y - (H - 120)) / 70 : 0);
+
+          if (wave + borderBoost + dither * 0.55 > 0.38) {
+            bx = 0; // Deep forest moss grass
+            by = 1;
+          } else {
+            bx = 1; // Summer meadow lush grass
+            by = 1;
+          }
+        }
 
         for (let py = y; py < y + 2 && py < H; py++) {
           for (let px = x; px < x + 2 && px < W; px++) {
-            let rgb: [number, number, number];
-
-            if (isBridge) {
-              rgb = [138, 98, 62]; // Wood planks
-            } else if (distRiver < 2.2) {
-              rgb = colWater;
-            } else if (distRiver < 3.4) {
-              rgb = colShore;
-            } else if (inCastleCourt) {
-              rgb = dither > 0.1 ? colCastlePave : colStone;
-            } else if (minRoadDist < 1.6 + dither * 0.4) {
-              rgb = minRoadDist < 0.9 ? colStone : colDirt;
+            let r: number, g: number, b: number;
+            if (isBridgePlank) {
+              const plankPattern = (px + (py % 4 === 0 ? 1 : 0)) % 6 === 0 ? 112 : 144;
+              r = plankPattern;
+              g = Math.round(plankPattern * 0.72);
+              b = Math.round(plankPattern * 0.44);
+            } else if (isWater) {
+              const [wr, wg, wb] = sampleWater(px, py);
+              const depthFactor = 1.0 - (distRiver / 2.0) * 0.2;
+              r = Math.round(wr * depthFactor);
+              g = Math.round(wg * depthFactor);
+              b = Math.round(wb * depthFactor);
             } else {
-              // Meadow / Forest with Bayer waves
-              const wave = Math.sin(px * 0.02 + py * 0.02) * 0.5 + Math.cos(px * 0.015 - py * 0.025) * 0.5;
-              if (wave + dither * 0.5 > 0.4) {
-                rgb = colDeep;
-              } else {
-                rgb = colLush;
-              }
+              [r, g, b] = sampleBlock(bx, by, px, py);
             }
 
             const oi = (py * W + px) * 4;
-            dst[oi] = rgb[0];
-            dst[oi + 1] = rgb[1];
-            dst[oi + 2] = rgb[2];
+            dst[oi] = r;
+            dst[oi + 1] = g;
+            dst[oi + 2] = b;
             dst[oi + 3] = 255;
           }
         }
@@ -243,11 +313,205 @@ export class WorldScene extends Phaser.Scene {
     return Math.hypot(px - (x1 + t * (x2 - x1)), py - (y1 + t * (y2 - y1)));
   }
 
+  private isPointInBuilding(x: number, y: number): boolean {
+    const tx = x / 16;
+    const ty = y / 16;
+    if (tx >= 14 && tx <= 26 && ty >= 10 && ty <= 22) return true;
+    if (tx >= 24 && tx <= 32 && ty >= 26 && ty <= 33) return true;
+    if (tx >= 34 && tx <= 40 && ty >= 15 && ty <= 21) return true;
+    if (tx >= 72 && tx <= 92 && ty >= 10 && ty <= 26) return true;
+    if (tx >= 14 && tx <= 38 && ty >= 48 && ty <= 74) return true;
+    if (tx >= 62 && tx <= 72 && ty >= 46 && ty <= 54) return true;
+    if (tx >= 41 && tx <= 47 && ty >= 61 && ty <= 67) return true;
+    if (tx >= 44 && tx <= 56 && ty >= 42 && ty <= 46) return true;
+    return false;
+  }
+
+  private isPointInRiver(x: number, y: number): boolean {
+    const tx = x / 16;
+    const ty = y / 16;
+    const riverCenterX = 52 + Math.sin(ty * 0.12) * 2.5;
+    return Math.abs(tx - riverCenterX) < 2.0;
+  }
+
+  private isOnRoad(x: number, y: number): boolean {
+    const tx = x / 16;
+    const ty = y / 16;
+    const dCastleRoad = this.distToSegment(tx, ty, 28, 28, 50, 40);
+    const dVillageRoad = this.distToSegment(tx, ty, 26, 58, 50, 40);
+    const dKlosterRoad = this.distToSegment(tx, ty, 54, 40, 78, 22);
+    const dFarmRoad = this.distToSegment(tx, ty, 54, 40, 70, 56);
+    return Math.min(dCastleRoad, dVillageRoad, dKlosterRoad, dFarmRoad) < 1.4;
+  }
+
+  private buildRiverShores(): void {
+    const curatedShoreRocks: Array<[string, number, number, number]> = [
+      ['rock_moss_a', 52 * 16 - 36, 120, 0.75],
+      ['rock_small_a', 52 * 16 + 34, 150, 0.8],
+      ['rock_moss_b', 52 * 16 - 32, 230, 0.7],
+      ['rock_small_b', 52 * 16 + 32, 280, 0.85],
+      ['rock_moss_f', 52 * 16 - 34, 370, 0.7],
+      ['rock_small_c', 52 * 16 + 36, 440, 0.8],
+      ['rock_moss_g', 52 * 16 - 30, 520, 0.75],
+      ['rock_moss_a', 52 * 16 - 34, 730, 0.75],
+      ['rock_small_d', 52 * 16 + 34, 780, 0.85],
+      ['rock_moss_c', 52 * 16 - 32, 860, 0.7],
+      ['rock_small_a', 52 * 16 + 36, 940, 0.8],
+      ['rock_moss_f', 52 * 16 - 36, 1030, 0.75],
+      ['rock_small_b', 52 * 16 + 34, 1110, 0.8],
+      ['rock_moss_b', 52 * 16 - 30, 1180, 0.75],
+    ];
+
+    curatedShoreRocks.forEach(([fr, rx, ry, sc]) => {
+      if (this.textures.get('world_atlas')?.has(fr)) {
+        this.add.image(rx, ry, 'world_atlas', fr).setScale(sc).setDepth(ry);
+      }
+    });
+
+    const shoreReeds: Array<[string, number, number]> = [
+      ['reeds', 52 * 16 - 28, 90],
+      ['reeds_2', 52 * 16 + 26, 130],
+      ['reeds', 52 * 16 - 26, 190],
+      ['reeds_2', 52 * 16 + 28, 250],
+      ['reeds', 52 * 16 - 28, 330],
+      ['reeds_2', 52 * 16 + 26, 410],
+      ['reeds', 52 * 16 - 26, 490],
+      ['reeds_2', 52 * 16 + 28, 550],
+      ['reeds', 52 * 16 - 28, 710],
+      ['reeds_2', 52 * 16 + 26, 760],
+      ['reeds', 52 * 16 - 26, 830],
+      ['reeds_2', 52 * 16 + 28, 900],
+      ['reeds', 52 * 16 - 28, 980],
+      ['reeds_2', 52 * 16 + 26, 1060],
+      ['reeds', 52 * 16 - 26, 1150],
+      ['reeds_2', 52 * 16 + 28, 1210],
+    ];
+
+    shoreReeds.forEach(([key, rx, ry]) => {
+      let spr: Phaser.GameObjects.Image | null = null;
+      if (this.textures.exists(key)) {
+        spr = this.add.image(rx, ry, key);
+      } else if (this.textures.get('world_atlas')?.has('fern_1')) {
+        spr = this.add.image(rx, ry, 'world_atlas', 'fern_1');
+      }
+      if (spr) {
+        spr.setOrigin(0.5, 0.9).setScale(0.9).setDepth(ry);
+      }
+    });
+
+    const lilypads: Array<[string, number, number]> = [
+      ['lilypad', 52 * 16 - 10, 160],
+      ['lilypad_flower', 52 * 16 + 8, 210],
+      ['lilypad', 52 * 16 - 6, 360],
+      ['lilypad_flower', 52 * 16 + 10, 480],
+      ['lilypad', 52 * 16 - 8, 740],
+      ['lilypad_flower', 52 * 16 + 12, 880],
+      ['lilypad', 52 * 16 - 10, 1080],
+    ];
+
+    lilypads.forEach(([key, lx, ly]) => {
+      if (this.textures.exists(key)) {
+        this.add.image(lx, ly, key).setOrigin(0.5, 0.5).setScale(0.95).setDepth(ly);
+      }
+    });
+  }
+
+  private scatterGroundFlora(): void {
+    const W = this.mapW * 16;
+    const H = this.mapH * 16;
+    const rng = new Phaser.Math.RandomDataGenerator(['medieval-feudal-flora-v2']);
+
+    const meadowPool = [
+      'grass_s1',
+      'grass_s2',
+      'grass_s3',
+      'grass_s4',
+      'grass_1',
+      'grass_2',
+      'flower_bunch_a',
+      'flower_bunch_b',
+      'flower_bunch_c',
+      'flower_purple',
+      'flower_white',
+      'flower_pink',
+      'flower_blue_a',
+      'flower_tulip_y',
+      'flower_sun',
+      'fern_1',
+      'fern_2',
+    ];
+
+    const roadPool = ['pebbles_a', 'pebbles_b', 'pebbles_c', 'rock_small_a'];
+    const forestPool = ['mushroom_small', 'mushroom_b', 'mushroom_red', 'fern_1', 'fern_2', 'fern_3', 'grass_s1'];
+
+    const atlas = this.textures.get('world_atlas');
+    if (!atlas) return;
+
+    for (let i = 0; i < 150; i++) {
+      const x = rng.between(28, W - 28);
+      const y = rng.between(32, H - 28);
+
+      if (this.isPointInBuilding(x, y) || this.isPointInRiver(x, y)) continue;
+
+      const onRoad = this.isOnRoad(x, y);
+      const isShady = y < 140 || y > H - 140 || x < 140 || x > W - 140;
+
+      const frame = onRoad
+        ? rng.pick(roadPool)
+        : isShady
+        ? rng.pick(forestPool)
+        : rng.pick(meadowPool);
+
+      if (atlas.has(frame)) {
+        const sc = onRoad ? 0.75 : rng.realInRange(0.75, 0.9);
+        this.add.image(x, y, 'world_atlas', frame).setScale(sc).setDepth(1.2);
+      }
+    }
+  }
+
+  private placeBorderTrees(): void {
+    const curatedTrees: Array<[string, number, number]> = [
+      ['tree_pine_1', 14 * 16, 8 * 16],
+      ['tree_pine_2', 22 * 16, 7 * 16],
+      ['tree_oak_1', 32 * 16, 8 * 16],
+      ['tree_oak_2', 10 * 16, 18 * 16],
+      ['tree_oak_1', 68 * 16, 8 * 16],
+      ['tree_oak_2', 76 * 16, 7 * 16],
+      ['tree_oak_3', 88 * 16, 8 * 16],
+      ['tree_fir_1', 94 * 16, 16 * 16],
+      ['tree_apple', 42 * 16, 38 * 16],
+      ['tree_apple', 46 * 16, 34 * 16],
+      ['tree_willow', 47 * 16, 72 * 16],
+      ['tree_willow', 58 * 16, 74 * 16],
+      ['tree_oak_2', 64 * 16, 74 * 16],
+      ['tree_oak_1', 78 * 16, 76 * 16],
+      ['tree_pine_1', 92 * 16, 72 * 16],
+    ];
+
+    const atlas = this.textures.get('world_atlas');
+    if (!atlas) return;
+
+    for (const [key, x, y] of curatedTrees) {
+      if (atlas.has(key)) {
+        const spr = this.add.image(x, y, 'world_atlas', key);
+        spr.setOrigin(0.5, 0.9);
+        spr.setScale(0.9);
+        spr.setDepth(y);
+        this.livingWorldManager.registerFlora(spr);
+      }
+    }
+  }
+
   private placeWorldDecor(): void {
     // 1. Static Decor from MEDIEVAL_DECOR
     for (const d of MEDIEVAL_DECOR) {
+      let img: Phaser.GameObjects.Image | null = null;
       if (this.textures.exists(d.spriteKey)) {
-        const img = this.add.image(d.x, d.y, d.spriteKey);
+        img = this.add.image(d.x, d.y, d.spriteKey);
+      } else if (this.textures.get('world_atlas')?.has(d.spriteKey)) {
+        img = this.add.image(d.x, d.y, 'world_atlas', d.spriteKey);
+      }
+      if (img) {
         img.setOrigin(d.originX ?? 0.5, d.originY ?? 0.9);
         if (d.scale) img.setScale(d.scale);
         img.setDepth(d.y);
@@ -262,24 +526,39 @@ export class WorldScene extends Phaser.Scene {
     // 2. Dynamic Erected Buildings (from gameState.builtBuildings)
     for (const bId of gameState.builtBuildings) {
       const bDef = MEDIEVAL_BUILDINGS.find((b) => b.id === bId);
-      if (bDef && this.textures.exists(bDef.spriteKey)) {
-        const bImg = this.add.image(bDef.x, bDef.y, bDef.spriteKey);
-        bImg.setOrigin(0.5, 0.9);
-        bImg.setScale(bDef.scale);
-        bImg.setDepth(bDef.y);
+      if (bDef) {
+        let bImg: Phaser.GameObjects.Image | null = null;
+        if (this.textures.exists(bDef.spriteKey)) {
+          bImg = this.add.image(bDef.x, bDef.y, bDef.spriteKey);
+        } else if (this.textures.get('world_atlas')?.has(bDef.spriteKey)) {
+          bImg = this.add.image(bDef.x, bDef.y, 'world_atlas', bDef.spriteKey);
+        }
+        if (bImg) {
+          bImg.setOrigin(0.5, 0.9);
+          bImg.setScale(bDef.scale);
+          bImg.setDepth(bDef.y);
+        }
       }
     }
   }
 
   private placeResourceNodes(): void {
     for (const node of RESOURCE_NODES) {
+      let spr: Phaser.GameObjects.Image | null = null;
       if (this.textures.exists(node.spriteKey)) {
-        const spr = this.add.image(node.x, node.y, node.spriteKey);
+        spr = this.add.image(node.x, node.y, node.spriteKey);
+      } else if (this.textures.get('world_atlas')?.has(node.spriteKey)) {
+        spr = this.add.image(node.x, node.y, 'world_atlas', node.spriteKey);
+      }
+      if (spr) {
         spr.setOrigin(0.5, 0.9);
         if (node.scale) spr.setScale(node.scale);
         spr.setDepth(node.y);
 
         this.livingWorldManager.registerResourceHotspot(node.x, node.y);
+        if (node.spriteKey.startsWith('tree_') || node.spriteKey.startsWith('bush_')) {
+          this.livingWorldManager.registerFlora(spr);
+        }
       }
     }
   }
