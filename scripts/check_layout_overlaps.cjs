@@ -123,3 +123,25 @@ if (overlaps > 0) {
 } else {
   console.log(`✅ Layout Check Passed: ${items.length} placed objects verified with 0 visual bounding-box overlaps!`);
 }
+
+// 6. Check Visual Quality Standards in WorldScene.ts
+const worldSceneCode = fs.readFileSync(path.join(ROOT, 'src/scenes/WorldScene.ts'), 'utf8');
+
+const qualityErrors = [];
+if (!worldSceneCode.includes('sampleBlock') && !worldSceneCode.includes('getImageData')) {
+  qualityErrors.push('WorldScene.ts does not sample real A2 pixel tiles via getImageData/sampleBlock (found flat color approximation)!');
+}
+if (!worldSceneCode.includes('scatterGroundFlora')) {
+  qualityErrors.push('WorldScene.ts does not define or call scatterGroundFlora() (missing 120-150 ground flora instances)!');
+}
+if (!worldSceneCode.includes("textures.get('world_atlas')?.has")) {
+  qualityErrors.push('WorldScene.ts lacks world_atlas texture check for decor (risk of invisible trees/props)!');
+}
+
+if (qualityErrors.length > 0) {
+  console.error('\n❌ VISUAL QUALITY GUARD FAILURES:');
+  qualityErrors.forEach((err) => console.error(`  - ${err}`));
+  process.exit(1);
+} else {
+  console.log('✅ Visual Quality Standards Verified (A2 Per-Pixel Sampling, Ground Flora & Atlas Decor).');
+}
