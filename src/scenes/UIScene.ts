@@ -48,6 +48,7 @@ export class UIScene extends Phaser.Scene {
 
   private selectedLexiconId: string = MEDIEVAL_LEXICON[0].id;
   private lexiconFilterTag: string = 'Alle';
+  private questCollapsed = false;
 
   // Dialog State
   private dialogLines: string[] = [];
@@ -76,9 +77,20 @@ export class UIScene extends Phaser.Scene {
     this.openStartScreen();
   }
 
+  update(): void {
+    const comp = document.getElementById('hud-compass');
+    if (comp && comp.textContent !== gameState.compassText) {
+      comp.textContent = gameState.compassText || '🧭 Wegweiser wird berechnet...';
+    }
+  }
+
   private registerGlobalHooks(): void {
     const win = window as any;
     win.__openMentorDialog = (ch: ChapterData) => this.openMentorDialog(ch);
+    win.__openMentorDialogForCurrent = () => {
+      const cur = MEDIEVAL_CHAPTERS.find((c) => c.id === gameState.chapter);
+      if (cur) this.openMentorDialog(cur);
+    };
     win.__openArtifactInspector = (rel: MedievalRelic) => this.openArtifactInspector(rel);
     win.__openStation = (stationId: string) => this.openStation(stationId);
     win.__showToast = (msg: string) => this.showToast(msg);
@@ -124,14 +136,34 @@ export class UIScene extends Phaser.Scene {
 
   private registerKeyboardShortcuts(): void {
     window.addEventListener('keydown', (e) => {
-      if (this.activeModal === 'start') return;
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
       const key = e.key.toUpperCase();
 
       if (e.key === 'Escape') {
-        if (this.activeModal !== 'none') {
+        if (this.activeModal !== 'none' && this.activeModal !== 'start') {
           this.closeModal();
-        } else {
+        } else if (this.activeModal === 'none') {
           this.openPauseDashboard();
+        }
+        return;
+      }
+
+      if (this.activeModal === 'start') return;
+
+      // When mentor dialog is open, E, Space or Enter advances dialog
+      if (this.activeModal === 'dialog' && (key === 'E' || e.code === 'Space' || e.key === 'Enter')) {
+        e.preventDefault();
+        this.advanceDialog();
+        return;
+      }
+
+      // Overworld interaction shortcuts [E], [SPACE], [ENTER]
+      if (this.activeModal === 'none' && (key === 'E' || e.code === 'Space' || e.key === 'Enter')) {
+        const win = window as any;
+        if (win.__triggerInteraction) {
+          win.__triggerInteraction();
         }
         return;
       }
@@ -234,18 +266,64 @@ export class UIScene extends Phaser.Scene {
     const curCh = MEDIEVAL_CHAPTERS.find((c) => c.id === gameState.chapter);
     if (!curCh) return;
 
+    const steps = gameState.getQuestStepProgress(curCh.id);
+    const allDone = gameState.checkQuest(curCh.id);
+    const nextPending = steps.find((s) => !s.done);
+
     this.questBox.innerHTML = `
-      <div class="qt-header">
-        <span class="qt-title">KAPITEL ${curCh.number}: ${curCh.title.toUpperCase()}</span>
+      <div class="qt-header" id="qt-toggle-btn" style="cursor:pointer;" title="Auftrag ein-/ausklappen">
+        <span class="qt-title">⚔️ KAPITEL ${curCh.number}: ${curCh.title.toUpperCase()}</span>
+        <button class="qt-collapse-btn" style="background:none;border:none;color:#fde047;cursor:pointer;font-size:12px;">${this.questCollapsed ? '➕' : '➖'}</button>
       </div>
-      <div class="qt-objective">
-        <strong>Aufgabe:</strong> ${gameState.activeObjectiveText || curCh.objective}
-      </div>
-      <div class="qt-divider"></div>
-      <div class="qt-compass" id="hud-compass">
-        ${gameState.compassText || '🧭 Wegweiser wird berechnet...'}
-      </div>
+      ${
+        this.questCollapsed
+          ? ''
+          : `
+        <div class="qt-body">
+          <div class="qt-mentor-row" style="font-size:11px;color:#fef08a;margin-bottom:4px;">Mentor: <strong>${curCh.mentor.name}</strong> (${curCh.mentor.role})</div>
+          <div class="qt-objective" style="font-size:11px;color:#fef3c7;margin-bottom:6px;">
+            <strong>Ziel:</strong> ${curCh.objective}
+          </div>
+          <div class="qt-steps-list" style="display:flex;flex-direction:column;gap:3px;margin:6px 0;">
+            ${steps
+              .map(
+                (s) => `
+              <div class="qt-step-item ${s.done ? 'step-done' : ''}" style="display:flex;align-items:flex-start;gap:6px;font-size:11px;color:${s.done ? '#86efac' : '#e2e8f0'};">
+                <span class="qt-step-icon" style="font-size:11px;">${s.done ? '✅' : '⬜'}</span>
+                <span class="qt-step-text" style="${s.done ? 'text-decoration:line-through;opacity:0.85;' : ''}">${s.label}</span>
+              </div>
+            `,
+              )
+              .join('')}
+          </div>
+          <div class="qt-divider" style="height:1px;background:rgba(217,119,6,0.35);margin:6px 0;"></div>
+          <div class="qt-compass" id="hud-compass" style="font-size:12px;font-weight:700;color:#facc15;">
+            ${gameState.compassText || '🧭 Wegweiser wird berechnet...'}
+          </div>
+          <div class="qt-status-banner ${allDone ? 'ready' : ''}" style="margin-top:6px;font-size:11px;padding:4px 6px;border-radius:4px;background:${allDone ? 'rgba(34,197,94,0.2)' : 'rgba(217,119,6,0.15)'};border:1px solid ${allDone ? '#22c55e' : 'rgba(217,119,6,0.4)'};color:${allDone ? '#86efac' : '#fde047'};">
+            ${
+              allDone
+                ? `✨ Alle 4 Aufgaben erfüllt! Sprich jetzt mit <strong>${curCh.mentor.name}</strong> [E] für das Geschichts-Quiz!`
+                : nextPending
+                ? `💡 Nächster Schritt: ${nextPending.label}`
+                : `💡 Untersuche den Fronhof und folge dem Kompass.`
+            }
+          </div>
+          <div class="qt-action-row" style="margin-top:8px;">
+            <button class="qt-action-btn" onclick="window.__openMentorDialogForCurrent()" style="width:100%;padding:4px 8px;font-size:11px;font-weight:700;background:#d97706;border:1px solid #f59e0b;color:#1a1006;border-radius:4px;cursor:pointer;">
+              💬 Mit ${curCh.mentor.name} sprechen [E]
+            </button>
+          </div>
+        </div>
+      `
+      }
     `;
+
+    document.getElementById('qt-toggle-btn')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.questCollapsed = !this.questCollapsed;
+      this.renderQuestTracker();
+    });
   }
 
   // =========================================================================
@@ -424,17 +502,70 @@ export class UIScene extends Phaser.Scene {
   public openMentorDialog(ch: ChapterData): void {
     this.activeModal = 'dialog';
     this.activeChapterDialog = ch;
-    this.dialogLines = ch.introDialog;
-    this.dialogIndex = 0;
     this.touchControls.setVisible(false);
     this.modalOverlay.style.display = 'flex';
+
+    const allDone = gameState.checkQuest(ch.id);
+    if (allDone) {
+      this.dialogLines = ch.outroDialog && ch.outroDialog.length > 0 ? ch.outroDialog : [
+        'Gar trefflich gearbeitet! Alle Aufgaben sind meisterhaft erfüllt.',
+        'Nun beweise dein erworbenes Wissen in der Geschichtsprüfung!'
+      ];
+    } else {
+      const step0Done = gameState.chapterObjectives[ch.id]?.[0];
+      if (step0Done) {
+        const steps = gameState.getQuestStepProgress(ch.id);
+        const pending = steps.filter((s) => !s.done).map((s) => s.label);
+        this.dialogLines = [
+          `Gott zum Gruße, junger Wanderer! Deine Aufgaben für dieses Kapitel sind noch im Gange:`,
+          `Verbleibend: ${pending.join(' • ')}`,
+          `Befolge den goldenen Wegweiser unten im Kompass, um dein nächstes Ziel zu finden!`
+        ];
+      } else {
+        this.dialogLines = ch.introDialog;
+      }
+    }
+    this.dialogIndex = 0;
     this.renderDialogLine();
+  }
+
+  private advanceDialog(): void {
+    if (!this.activeChapterDialog) return;
+    const ch = this.activeChapterDialog;
+    sound.click();
+    if (this.dialogIndex < this.dialogLines.length - 1) {
+      this.dialogIndex++;
+      this.renderDialogLine();
+    } else {
+      const allDone = gameState.checkQuest(ch.id);
+      if (allDone) {
+        this.openChapterQuiz(ch);
+      } else {
+        // Mark Step 0 complete!
+        gameState.setObjectiveProgress(ch.id, 0, true);
+        this.showToast(`✅ Aufgabe 1/4 erfüllt! Erforsche nun den Hof und folge dem Kompass.`);
+        this.closeModal();
+      }
+    }
+  }
+
+  private speakCurrentDialog(): void {
+    if (!this.activeChapterDialog) return;
+    const line = this.dialogLines[this.dialogIndex];
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(line);
+      u.lang = 'de-DE';
+      u.rate = 0.96;
+      window.speechSynthesis.speak(u);
+    }
   }
 
   private renderDialogLine(): void {
     if (!this.activeChapterDialog) return;
     const ch = this.activeChapterDialog;
     const line = this.dialogLines[this.dialogIndex];
+    const allDone = gameState.checkQuest(ch.id);
 
     this.modalOverlay.innerHTML = `
       <div class="dialog-box">
@@ -450,23 +581,28 @@ export class UIScene extends Phaser.Scene {
           <p class="dialog-text">${line}</p>
           <div class="dialog-footer">
             <span class="dialog-step-info">Abschnitt ${this.dialogIndex + 1} von ${this.dialogLines.length}</span>
-            <button class="dialog-next-btn" id="btn-dialog-next">
-              ${this.dialogIndex < this.dialogLines.length - 1 ? 'Weiter ▶' : 'Zur Prüfung / Aufgabe ▶'}
-            </button>
+            <div style="display:flex;gap:8px;">
+              <button class="retro-btn" id="btn-dialog-speak" style="padding:4px 10px;font-size:12px;cursor:pointer;">🔊 Vorlesen</button>
+              <button class="dialog-next-btn" id="btn-dialog-next">
+                ${
+                  this.dialogIndex < this.dialogLines.length - 1
+                    ? 'Weiter (E) ▶'
+                    : allDone
+                    ? 'Zur Prüfung ▶'
+                    : 'Aufgaben beginnen (E) ▶'
+                }
+              </button>
+            </div>
           </div>
         </div>
       </div>
     `;
 
+    document.getElementById('btn-dialog-speak')?.addEventListener('click', () => {
+      this.speakCurrentDialog();
+    });
     document.getElementById('btn-dialog-next')?.addEventListener('click', () => {
-      sound.click();
-      if (this.dialogIndex < this.dialogLines.length - 1) {
-        this.dialogIndex++;
-        this.renderDialogLine();
-      } else {
-        // Starte Kapitel-Quiz
-        this.openChapterQuiz(ch);
-      }
+      this.advanceDialog();
     });
   }
 
@@ -952,6 +1088,7 @@ export class UIScene extends Phaser.Scene {
         const id = (e.currentTarget as HTMLElement).dataset.id || '';
         if (gameState.craft(id)) {
           sound.questStep();
+          gameState.setObjectiveProgress(gameState.chapter, 2, true);
           this.showToast('✅ Erfolgreich geschmiedet / hergestellt!');
           this.openCraftModal();
         } else {
@@ -1003,6 +1140,7 @@ export class UIScene extends Phaser.Scene {
         const id = (e.currentTarget as HTMLElement).dataset.id || '';
         if (gameState.build(id)) {
           sound.success();
+          gameState.setObjectiveProgress(gameState.chapter, 3, true);
           this.showToast('🏰 Bauwerk erfolgreich errichtet!');
           this.openBuildModal();
         } else {

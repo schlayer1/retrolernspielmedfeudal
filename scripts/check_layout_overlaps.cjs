@@ -124,10 +124,11 @@ if (overlaps > 0) {
   console.log(`✅ Layout Check Passed: ${items.length} placed objects verified with 0 visual bounding-box overlaps!`);
 }
 
-// 6. Check Visual Quality Standards in WorldScene.ts
-const worldSceneCode = fs.readFileSync(path.join(ROOT, 'src/scenes/WorldScene.ts'), 'utf8');
-
+// 6. Comprehensive Didactic & Visual Quality Gate
 const qualityErrors = [];
+
+// A. WorldScene Engine Standards
+const worldSceneCode = fs.readFileSync(path.join(ROOT, 'src/scenes/WorldScene.ts'), 'utf8');
 if (!worldSceneCode.includes('sampleBlock') && !worldSceneCode.includes('getImageData')) {
   qualityErrors.push('WorldScene.ts does not sample real A2 pixel tiles via getImageData/sampleBlock (found flat color approximation)!');
 }
@@ -138,10 +139,53 @@ if (!worldSceneCode.includes("textures.get('world_atlas')?.has")) {
   qualityErrors.push('WorldScene.ts lacks world_atlas texture check for decor (risk of invisible trees/props)!');
 }
 
+// B. Didactic Stations Check (min. 5 stations)
+try {
+  const stationsCode = fs.readFileSync(path.join(ROOT, 'src/data/stations.ts'), 'utf8');
+  const stationMatches = stationsCode.match(/id:\s*['"][^'"]+['"]/g) || [];
+  if (stationMatches.length < 5) {
+    qualityErrors.push(`src/data/stations.ts contains only ${stationMatches.length} stations (minimum required: 5)!`);
+  }
+} catch (e) {
+  qualityErrors.push(`Failed to read src/data/stations.ts: ${e.message}`);
+}
+
+// C. Archaeological Relics Check (min. 5 primary sources)
+try {
+  const relicsCode = fs.readFileSync(path.join(ROOT, 'src/data/relics.ts'), 'utf8');
+  const relicMatches = relicsCode.match(/id:\s*['"][^'"]+['"]/g) || [];
+  if (relicMatches.length < 5) {
+    qualityErrors.push(`src/data/relics.ts contains only ${relicMatches.length} relics (minimum required: 5)!`);
+  }
+} catch (e) {
+  qualityErrors.push(`Failed to read src/data/relics.ts: ${e.message}`);
+}
+
+// D. Progressive Historical Lexicon Check (min. 20 terms)
+try {
+  const lexiconCode = fs.readFileSync(path.join(ROOT, 'src/data/lexicon.ts'), 'utf8');
+  const termMatches = lexiconCode.match(/term:\s*['"][^'"]+['"]/g) || [];
+  if (termMatches.length < 20) {
+    qualityErrors.push(`src/data/lexicon.ts contains only ${termMatches.length} terms (minimum required: 20)!`);
+  }
+} catch (e) {
+  qualityErrors.push(`Failed to read src/data/lexicon.ts: ${e.message}`);
+}
+
+// E. Didactic A4 Print Sheet Check
+if (!fs.existsSync(path.join(ROOT, 'src/ui/PrintSheet.ts'))) {
+  qualityErrors.push('src/ui/PrintSheet.ts is missing (didactic 1-click A4 student print sheet required)!');
+}
+
+// F. Audio Synthesizer Check
+if (!fs.existsSync(path.join(ROOT, 'src/audio/sound.ts'))) {
+  qualityErrors.push('src/audio/sound.ts is missing (4-surface footstep & UI sound synthesizer required)!');
+}
+
 if (qualityErrors.length > 0) {
-  console.error('\n❌ VISUAL QUALITY GUARD FAILURES:');
+  console.error('\n❌ COMPREHENSIVE QUALITY GATE FAILURES:');
   qualityErrors.forEach((err) => console.error(`  - ${err}`));
   process.exit(1);
 } else {
-  console.log('✅ Visual Quality Standards Verified (A2 Per-Pixel Sampling, Ground Flora & Atlas Decor).');
+  console.log('✅ Comprehensive Quality Standards Verified (A2 Terrain, Flora, Atlas Decor, 5 Stations, 5 Relics, 20+ Terms, Audio & A4 Print Sheet).');
 }

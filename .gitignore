@@ -3,6 +3,10 @@ dist
 .DS_Store
 /raw_assets/
 /Assets/
+/assets/
+*.rar
+*.zip
 scratch
+scratch/
 *.log
 verify_*.png

@@ -1,4 +1,5 @@
 import { MEDIEVAL_BUILDINGS, MEDIEVAL_ITEMS, MEDIEVAL_RECIPES, MedievalItemId } from '../data/items';
+import { MEDIEVAL_CHAPTERS, ChapterData } from '../data/chapters';
 import { PlayerGender, PlayerRole, SaveData, SaveManager } from './SaveManager';
 
 export interface RoleDefinition {
@@ -80,10 +81,14 @@ export class GameState {
 
   constructor() {
     this.initDefaultInventory();
+    if (!this.chapterObjectives[1]) {
+      this.chapterObjectives[1] = [false, false, false, false];
+    }
   }
 
   private initDefaultInventory(): void {
     this.inventory = {
+      mehl_sack: 2,
       roggen_saat: 4,
       hafer_saat: 2,
       heuballen: 3,
@@ -121,11 +126,30 @@ export class GameState {
     return list.length >= 4 && list.every((v) => v === true);
   }
 
-  public setCompass(targetName: string, dx: number, dy: number): void {
+  public getQuestStepProgress(ch = this.chapter): { label: string; done: boolean }[] {
+    const chapterData = MEDIEVAL_CHAPTERS.find((c) => c.id === ch);
+    const tasks = chapterData?.tasks || [
+      'Sprich mit dem Mentor.',
+      'Erkunde das Umland.',
+      'Stelle benötigte Gegenstände her (Taste C).',
+      'Errichte die geforderte Infrastruktur (Taste B).',
+    ];
+    const progressList = this.chapterObjectives[ch] || [false, false, false, false];
+    return tasks.map((label, idx) => ({
+      label,
+      done: !!progressList[idx],
+    }));
+  }
+
+  public checkQuest(ch = this.chapter): boolean {
+    return this.isChapterObjectiveComplete(ch);
+  }
+
+  public setCompass(targetName: string, dx: number, dy: number, actionTip?: string): void {
     const distPx = Math.hypot(dx, dy);
-    const meters = Math.max(2, Math.round(distPx / 8));
-    if (distPx < 32) {
-      this.compassText = `📍 Ziel erreicht: ${targetName} (drücke E)`;
+    const meters = Math.max(1, Math.round(distPx / 8));
+    if (distPx < 36) {
+      this.compassText = actionTip || `📍 Direkt vor dir: ${targetName} (drücke E)`;
       return;
     }
     const angle = Math.atan2(dy, dx) * (180 / Math.PI); // -180..180
@@ -213,6 +237,15 @@ export class GameState {
   public selectStartChapter(ch: number): void {
     this.chapter = ch;
     this.maxUnlockedChapter = Math.max(this.maxUnlockedChapter, ch);
+    if (!this.chapterObjectives[ch]) {
+      this.chapterObjectives[ch] = [false, false, false, false];
+    }
+    const curCh = MEDIEVAL_CHAPTERS.find((c) => c.id === ch);
+    if (curCh) {
+      this.playerX = curCh.targetCoords.x;
+      this.playerY = curCh.targetCoords.y;
+      this.activeObjectiveText = curCh.objective;
+    }
     this.notify();
   }
 
@@ -302,6 +335,9 @@ export class GameState {
     this.walkedDistanceMeters = s.walkedDistanceMeters || 0;
     this.storyFlags = s.storyFlags || {};
     this.dilemmaSummary = s.dilemmaSummary || '';
+    if (!this.chapterObjectives[this.chapter]) {
+      this.chapterObjectives[this.chapter] = [false, false, false, false];
+    }
     return true;
   }
 }

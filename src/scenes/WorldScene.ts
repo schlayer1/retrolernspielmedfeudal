@@ -39,6 +39,8 @@ export class WorldScene extends Phaser.Scene {
     D: Phaser.Input.Keyboard.Key;
     E: Phaser.Input.Keyboard.Key;
   };
+  private spaceKey?: Phaser.Input.Keyboard.Key;
+  private enterKey?: Phaser.Input.Keyboard.Key;
 
   private mentorSprite: Phaser.GameObjects.Sprite | null = null;
   private targets: InteractiveTarget[] = [];
@@ -93,6 +95,8 @@ export class WorldScene extends Phaser.Scene {
         D: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D),
         E: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E),
       };
+      this.spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+      this.enterKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER);
     }
 
     // 7. Place Static Decor & Architecture
@@ -112,20 +116,24 @@ export class WorldScene extends Phaser.Scene {
     this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
     this.cameras.main.setZoom(2.2);
 
-    // 11. Setup Interactive Targets & Mentors
-    this.setupTargets();
+    // 11. Companion Unlock (Kapitel 1)
+    this.companionManager.unlock(this.player.x - 20, this.player.y);
 
-    // 12. Init Wildlife & Living World
+    // 12. Setup Interactive Targets & Mentors
+    this.setupTargets();
+    this.initInteractionLabel();
+
+    // Expose interaction trigger globally for DOM label click & UI scene
+    (window as any).__triggerInteraction = () => this.triggerInteraction();
+
+    // 13. Init Wildlife & Living World
     this.wildlifeManager.init();
     this.livingWorldManager.initWaterEffects(50 * 16, 54 * 16, 4 * 16, 76 * 16);
 
-    // 13. Fire & Smoke on Forges & Braziers
+    // 14. Fire & Smoke on Forges & Braziers
     this.livingWorldManager.registerFireSource(36 * 16, 52 * 16, true, 34, 0xffa533); // Schmiede
     this.livingWorldManager.registerFireSource(22 * 16, 16 * 16, true, 30, 0xff7722); // Burg-Kamin
     this.livingWorldManager.registerFireSource(24 * 16, 28 * 16, false, 24, 0xffaa44); // Burgtor-Fackel
-
-    // 14. Companion Unlock (Kapitel 1)
-    this.companionManager.unlock(this.player.x - 20, this.player.y);
 
     // 15. First Chapter Banner
     this.lastBannerChapter = gameState.chapter;
@@ -666,7 +674,23 @@ export class WorldScene extends Phaser.Scene {
       actionTip: '[E] Rüstkammer-Station öffnen',
     });
 
-    // 5. Falko Streichel-Ziel
+    // 5. Interaktive Dorf- & Hof-Objekte aus MEDIEVAL_DECOR
+    for (const d of MEDIEVAL_DECOR) {
+      if (d.interactive) {
+        this.targets.push({
+          id: d.id,
+          kind: d.kind === 'resource' ? 'resource' : 'interactive_quest',
+          name: d.label ? d.label.replace(/^\[E\]\s*/, '') : d.id,
+          sub: d.kind === 'building' ? 'Dorfgebäude' : 'Interaktives Objekt',
+          x: d.x,
+          y: d.y,
+          minChapter: 1,
+          actionTip: d.label || '[E] Interagieren',
+        });
+      }
+    }
+
+    // 6. Falko Streichel-Ziel
     if (this.companionManager.sprite) {
       this.targets.push({
         id: 'companion_falko',
@@ -698,6 +722,8 @@ export class WorldScene extends Phaser.Scene {
       this.mentorSprite.setOrigin(0.5, 0.9);
       this.mentorSprite.setScale(0.8);
       this.mentorSprite.setDepth(mentor.y);
+      this.mentorSprite.setInteractive({ useHandCursor: true });
+      this.mentorSprite.on('pointerdown', () => this.triggerInteraction());
 
       if (this.anims.exists(`${spriteKey}-idle-down`)) {
         this.mentorSprite.play(`${spriteKey}-idle-down`);
@@ -716,6 +742,12 @@ export class WorldScene extends Phaser.Scene {
       this.labelDiv.style.display = 'none';
       document.body.appendChild(this.labelDiv);
     }
+    this.labelDiv.style.pointerEvents = 'auto';
+    this.labelDiv.style.cursor = 'pointer';
+    this.labelDiv.onclick = (e) => {
+      e.stopPropagation();
+      this.triggerInteraction();
+    };
   }
 
   private onGameStateChanged(): void {
@@ -862,8 +894,12 @@ export class WorldScene extends Phaser.Scene {
     // 3. Proximity Target & Quest Compass
     this.updateActiveTargetAndCompass();
 
-    // 4. Handle Interaction Trigger [E]
-    const ePressed = Phaser.Input.Keyboard.JustDown(this.wasd?.E) || (touch && touch.actionPressed);
+    // 4. Handle Interaction Trigger [E], [SPACE], [ENTER]
+    const ePressed =
+      Phaser.Input.Keyboard.JustDown(this.wasd?.E) ||
+      (this.spaceKey && Phaser.Input.Keyboard.JustDown(this.spaceKey)) ||
+      (this.enterKey && Phaser.Input.Keyboard.JustDown(this.enterKey)) ||
+      (touch && touch.actionPressed);
     if (ePressed) {
       if (touch) touch.actionPressed = false;
       this.triggerInteraction();
@@ -872,7 +908,7 @@ export class WorldScene extends Phaser.Scene {
 
   private updateActiveTargetAndCompass(): void {
     let closestTarget: InteractiveTarget | null = null;
-    let minDist = 44; // Proximity threshold
+    let minDist = 48; // Proximity threshold
 
     for (const t of this.targets) {
       if (t.minChapter > gameState.chapter) continue;
@@ -882,7 +918,8 @@ export class WorldScene extends Phaser.Scene {
       const ty = t.kind === 'companion' && this.companionManager.sprite ? this.companionManager.sprite.y : t.y;
 
       const d = Phaser.Math.Distance.Between(this.player.x, this.player.y, tx, ty);
-      if (d < minDist) {
+      const reach = t.kind === 'interactive_quest' ? 56 : 46;
+      if (d < reach && d < minDist) {
         minDist = d;
         closestTarget = t;
       }
@@ -904,7 +941,7 @@ export class WorldScene extends Phaser.Scene {
       const cam = this.cameras.main;
       const rect = this.game.canvas.getBoundingClientRect();
       const sx = rect.left + ((tx - cam.worldView.x) / cam.worldView.width) * rect.width;
-      const sy = rect.top + ((ty - 24 - cam.worldView.y) / cam.worldView.height) * rect.height;
+      const sy = rect.top + ((ty - 28 - cam.worldView.y) / cam.worldView.height) * rect.height;
 
       this.labelDiv.style.left = `${sx}px`;
       this.labelDiv.style.top = `${sy}px`;
@@ -914,17 +951,90 @@ export class WorldScene extends Phaser.Scene {
       this.labelDiv.style.display = 'none';
     }
 
-    // Quest-Radar / Compass zum aktuellen Kapitel-Mentor
+    // Quest-Radar / Compass zum intelligenten Ziel
     const curCh = MEDIEVAL_CHAPTERS.find((c) => c.id === gameState.chapter);
     if (curCh) {
-      const dx = curCh.targetCoords.x - this.player.x;
-      const dy = curCh.targetCoords.y - this.player.y;
-      gameState.setCompass(curCh.targetCoords.name, dx, dy);
+      const steps = gameState.getQuestStepProgress(curCh.id);
+      let targetX = curCh.targetCoords.x;
+      let targetY = curCh.targetCoords.y;
+      let targetName = curCh.mentor.name;
+      let actionTip = `📍 Sprich mit ${curCh.mentor.name} [E]`;
+
+      if (!steps[0]?.done) {
+        // Step 0: Mentor Intro Dialog
+        targetX = curCh.mentor.x;
+        targetY = curCh.mentor.y;
+        targetName = curCh.mentor.name;
+        actionTip = `📍 Sprich mit ${curCh.mentor.name} [E]`;
+      } else if (!steps[1]?.done) {
+        // Step 1: Action (Falko, Relic, Station, etc.)
+        if (curCh.id === 1 && this.companionManager.sprite) {
+          targetX = this.companionManager.sprite.x;
+          targetY = this.companionManager.sprite.y;
+          targetName = 'Hofhund Falko';
+          actionTip = '❤️ Streichle Falko [E]!';
+        } else if (curCh.id === 2) {
+          targetX = 62 * 16;
+          targetY = 60 * 16;
+          targetName = 'Pflugmesser (Südfeld)';
+          actionTip = '📍 Birg das Pflugmesser [E]!';
+        } else if (curCh.id === 3) {
+          targetX = 74 * 16;
+          targetY = 26 * 16;
+          targetName = 'Kräutergarten (Kloster)';
+          actionTip = '🌿 Untersuche die Kräuter [E]!';
+        } else if (curCh.id === 4) {
+          targetX = 32 * 16;
+          targetY = 44 * 16;
+          targetName = 'Marktplatz (Silberdenar)';
+          actionTip = '🪙 Untersuche den Markt [E]!';
+        } else if (curCh.id === 5) {
+          targetX = 44 * 16;
+          targetY = 64 * 16;
+          targetName = 'Wassermühle am Mühlenbach';
+          actionTip = '⚙️ Mahle Getreide an der Mühle [E]!';
+        } else if (curCh.id === 6) {
+          targetX = 16 * 16;
+          targetY = 24 * 16;
+          targetName = 'Ritterliche Rüstkammer';
+          actionTip = '🛡️ Untersuche die Rüstkammer [E]!';
+        } else {
+          targetX = curCh.targetCoords.x;
+          targetY = curCh.targetCoords.y;
+          targetName = curCh.targetCoords.name;
+        }
+      } else if (!steps[2]?.done) {
+        // Step 2: Crafting [C]
+        targetX = this.player.x;
+        targetY = this.player.y;
+        targetName = 'Werkstatt';
+        gameState.compassText = '🥖 Drücke C -> Handwerksmenü öffnen & Gegenstand herstellen!';
+      } else if (!steps[3]?.done) {
+        // Step 3: Building [B]
+        targetX = this.player.x;
+        targetY = this.player.y;
+        targetName = 'Baugelände';
+        gameState.compassText = '🏰 Drücke B -> Baumodus öffnen & Struktur errichten!';
+      } else {
+        // ALL 4 STEPS DONE! Point to Mentor for Quiz!
+        targetX = curCh.mentor.x;
+        targetY = curCh.mentor.y;
+        targetName = `${curCh.mentor.name} (Prüfung)`;
+        actionTip = `✨ Alle Aufgaben erfüllt! Sprich mit ${curCh.mentor.name} [E] für das Quiz!`;
+      }
+
+      if (steps[0]?.done && (!steps[2]?.done || !steps[3]?.done) && (targetX === this.player.x && targetY === this.player.y)) {
+        // Compass text already set above!
+      } else {
+        const dx = targetX - this.player.x;
+        const dy = targetY - this.player.y;
+        gameState.setCompass(targetName, dx, dy, actionTip);
+      }
       gameState.activeObjectiveText = curCh.objective;
     }
   }
 
-  private triggerInteraction(): void {
+  public triggerInteraction(): void {
     if (!this.activeTarget) return;
 
     sound.click();
@@ -932,6 +1042,9 @@ export class WorldScene extends Phaser.Scene {
     // 1. Companion
     if (this.activeTarget.kind === 'companion') {
       this.companionManager.pet();
+      if (gameState.chapter === 1) {
+        gameState.setObjectiveProgress(1, 1, true);
+      }
       return;
     }
 
@@ -953,6 +1066,15 @@ export class WorldScene extends Phaser.Scene {
       const rel = this.activeTarget.relic;
       gameState.discoverRelic(rel.id);
       sound.questStep();
+      if (rel.id === 'relic_pflugmesser' && gameState.chapter === 2) {
+        gameState.setObjectiveProgress(2, 1, true);
+      } else if (rel.id === 'relic_codex' && gameState.chapter === 3) {
+        gameState.setObjectiveProgress(3, 1, true);
+      } else if (rel.id === 'relic_silberdenar' && gameState.chapter === 4) {
+        gameState.setObjectiveProgress(4, 1, true);
+      } else if (rel.id === 'relic_ritterschild' && gameState.chapter === 6) {
+        gameState.setObjectiveProgress(6, 1, true);
+      }
       const win = window as any;
       if (win.__openArtifactInspector) {
         win.__openArtifactInspector(rel);
@@ -960,33 +1082,63 @@ export class WorldScene extends Phaser.Scene {
       return;
     }
 
-    // 4. Rohstoff ernten
-    if (this.activeTarget.kind === 'resource' && this.activeTarget.itemId) {
-      gameState.addInventory(this.activeTarget.itemId, 2);
-      sound.questStep();
-      const win = window as any;
-      if (win.__showToast) {
-        win.__showToast(`🌾 +2 ${MEDIEVAL_ITEMS[this.activeTarget.itemId]?.name || 'Rohstoff'} erhalten!`);
+    // 4. Rohstoff ernten & Dorfbrunnen
+    if (this.activeTarget.kind === 'resource') {
+      const itemId = this.activeTarget.itemId;
+      if (itemId) {
+        gameState.addInventory(itemId, 2);
+        sound.questStep();
+        const win = window as any;
+        if (win.__showToast) {
+          win.__showToast(`🌾 +2 ${MEDIEVAL_ITEMS[itemId]?.name || 'Rohstoff'} erhalten!`);
+        }
+      } else if (this.activeTarget.id === 'dorf_brunnen') {
+        gameState.addInventory('wasser_eimer', 1);
+        sound.questStep();
+        const win = window as any;
+        if (win.__showToast) win.__showToast('💧 Frisches Quellwasser aus dem Dorfbrunnen geschöpft (+1 Wassereimer)!');
+      } else {
+        sound.click();
+        const win = window as any;
+        if (win.__showToast) win.__showToast(`🔍 ${this.activeTarget.name} untersucht.`);
       }
       return;
     }
 
-    // 5. Interaktive Stationen
-    if (this.activeTarget.id === 'inter_schmiede_amboss') {
+    // 5. Interaktive Stationen & Gebäude
+    if (this.activeTarget.id === 'inter_schmiede_amboss' || this.activeTarget.id === 'dorf_amboss') {
       const win = window as any;
-      if (win.__toggleModal) win.__toggleModal('craft');
+      if (win.__toggleModal) win.__toggleModal('C');
       return;
     }
 
-    if (this.activeTarget.id === 'inter_kloster_kraeuter') {
+    if (this.activeTarget.id === 'inter_kloster_kraeuter' || this.activeTarget.id === 'kloster_kraeutergarten') {
+      if (gameState.chapter === 3) gameState.setObjectiveProgress(3, 1, true);
       const win = window as any;
       if (win.__openStation) win.__openStation('station_kraeuter');
       return;
     }
 
-    if (this.activeTarget.id === 'inter_burg_ruestung') {
+    if (this.activeTarget.id === 'inter_burg_ruestung' || this.activeTarget.id === 'burg_ruestkammer') {
+      if (gameState.chapter === 6) gameState.setObjectiveProgress(6, 1, true);
       const win = window as any;
       if (win.__openStation) win.__openStation('station_ruestkammer');
+      return;
+    }
+
+    if (this.activeTarget.id === 'dorf_wassermuehle') {
+      sound.questStep();
+      gameState.addInventory('roggen_saat', 1);
+      if (gameState.chapter === 5) gameState.setObjectiveProgress(5, 1, true);
+      const win = window as any;
+      if (win.__showToast) win.__showToast('⚙️ Die Wassermühle mahlt den Roggen zu feinem Mehl (+1 Mehl/Saat)!');
+      return;
+    }
+
+    if (this.activeTarget.id === 'dorf_gasthof') {
+      sound.door();
+      const win = window as any;
+      if (win.__showToast) win.__showToast('🍻 Dorfkrug "Zum Goldenen Pflug": Hörige und Hufner wärmen sich am Kamin.');
       return;
     }
   }
