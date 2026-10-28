@@ -61,6 +61,12 @@ export class GameState {
   public storyFlags: Record<string, boolean> = {};
   public dilemmaSummary = '';
 
+  // Vitality & Status Bars (Steinzeit / Griechenland Standard, 0..100)
+  public food = 85;
+  public safety = 72;
+  public knowledge = 20;
+  public dayTime = 0.25; // 0..1 (0.15..0.75 = Tag, sonst Dämmerung/Nacht)
+
   // Chapter 4-point gating criteria tracking
   public chapterObjectives: Record<number, boolean[]> = {
     1: [false, false, false, false],
@@ -88,13 +94,37 @@ export class GameState {
 
   private initDefaultInventory(): void {
     this.inventory = {
+      brot_fladen: 2,
       mehl_sack: 2,
       roggen_saat: 4,
       hafer_saat: 2,
       heuballen: 3,
       holz_balken: 3,
+      feldstein: 2,
       wasser_eimer: 2,
     };
+  }
+
+  public eat(): string {
+    if ((this.inventory.brot_fladen || 0) > 0) {
+      this.removeInventory('brot_fladen', 1);
+      this.food = Math.min(100, this.food + 30);
+      this.notify();
+      return '🍞 Du hast ein frisches Dorfbrot gegessen (+30% Nahrung)!';
+    }
+    if ((this.inventory.roggen_saat || 0) > 0) {
+      this.removeInventory('roggen_saat', 1);
+      this.food = Math.min(100, this.food + 14);
+      this.notify();
+      return '🌾 Du hast geröstetes Roggenkorn gekaut (+14% Nahrung).';
+    }
+    if ((this.inventory.wasser_eimer || 0) > 0) {
+      this.removeInventory('wasser_eimer', 1);
+      this.food = Math.min(100, this.food + 10);
+      this.notify();
+      return '💧 Du hast klares Brunnenwasser getrunken (+10% Nahrung).';
+    }
+    return '⚠️ Kein Brot oder Proviant im Beutel! Backe Dorfbrot [C] oder ernte Vorräte.';
   }
 
   public subscribe(fn: Listener): () => void {
@@ -198,6 +228,7 @@ export class GameState {
     }
     this.addInventory(r.result, r.resultAmount);
     this.craftedOnce.add(r.result);
+    this.knowledge = Math.min(100, this.knowledge + 4);
     this.notify();
     return true;
   }
@@ -211,6 +242,8 @@ export class GameState {
       this.removeInventory(k as MedievalItemId, v || 0);
     }
     this.builtBuildings.add(buildingId);
+    this.safety = Math.min(100, this.safety + 8);
+    this.knowledge = Math.min(100, this.knowledge + 4);
     this.notify();
     return true;
   }
@@ -218,6 +251,7 @@ export class GameState {
   public discoverRelic(id: string): void {
     if (!this.discoveredRelics.has(id)) {
       this.discoveredRelics.add(id);
+      this.knowledge = Math.min(100, this.knowledge + 10);
       this.notify();
     }
   }
@@ -227,6 +261,8 @@ export class GameState {
     if (quizScore >= 1) {
       this.quizPerfect.add(ch);
     }
+    this.knowledge = Math.min(100, this.knowledge + 12);
+    this.safety = Math.min(100, this.safety + 5);
     if (ch < 8) {
       this.chapter = ch + 1;
       this.maxUnlockedChapter = Math.max(this.maxUnlockedChapter, ch + 1);
@@ -310,6 +346,10 @@ export class GameState {
       walkedDistanceMeters: this.walkedDistanceMeters,
       storyFlags: this.storyFlags,
       dilemmaSummary: this.dilemmaSummary,
+      food: this.food,
+      safety: this.safety,
+      knowledge: this.knowledge,
+      dayTime: this.dayTime,
     };
     SaveManager.save(data);
   }
@@ -335,6 +375,10 @@ export class GameState {
     this.walkedDistanceMeters = s.walkedDistanceMeters || 0;
     this.storyFlags = s.storyFlags || {};
     this.dilemmaSummary = s.dilemmaSummary || '';
+    if (typeof s.food === 'number') this.food = s.food;
+    if (typeof s.safety === 'number') this.safety = s.safety;
+    if (typeof s.knowledge === 'number') this.knowledge = s.knowledge;
+    if (typeof s.dayTime === 'number') this.dayTime = s.dayTime;
     if (!this.chapterObjectives[this.chapter]) {
       this.chapterObjectives[this.chapter] = [false, false, false, false];
     }

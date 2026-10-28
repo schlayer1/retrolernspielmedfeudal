@@ -22,6 +22,10 @@ export interface SaveData {
   walkedDistanceMeters?: number;
   storyFlags?: Record<string, boolean>;
   dilemmaSummary?: string;
+  food?: number;
+  safety?: number;
+  knowledge?: number;
+  dayTime?: number;
 }
 
 const STORAGE_KEY = 'retro_save_medieval_feudal';

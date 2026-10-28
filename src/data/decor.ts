@@ -99,14 +99,28 @@ export interface ResourceNode {
 }
 
 export const RESOURCE_NODES: ResourceNode[] = [
-  // Holzernte am Waldsaum (Norden)
-  { id: 'node_wood_1', name: 'Bauholz-Eiche', x: 58 * 16, y: 16 * 16, item: 'holz_balken', amount: 3, respawnTime: 20000, spriteKey: 'tree_oak_1', scale: 1.0 },
-  { id: 'node_wood_2', name: 'Alte Weide', x: 52 * 16, y: 24 * 16, item: 'holz_balken', amount: 2, respawnTime: 20000, spriteKey: 'tree_willow', scale: 1.0 },
-  // Ackerernte (Roggen & Hafer)
-  { id: 'node_crop_winter', name: 'Winterfrucht (Roggen)', x: 72 * 16, y: 62 * 16, item: 'roggen_saat', amount: 3, respawnTime: 15000, spriteKey: 'crop_wheat_4', scale: 1.0 },
-  { id: 'node_crop_sommer', name: 'Sommerfrucht (Hafer)', x: 82 * 16, y: 62 * 16, item: 'hafer_saat', amount: 3, respawnTime: 15000, spriteKey: 'crop_wheat_4', scale: 1.0 },
-  // Apfelbaum am Dorfrand
-  { id: 'node_fruit_tree', name: 'Streuobst-Apfelbaum', x: 42 * 16, y: 44 * 16, item: 'brot_fladen', amount: 2, respawnTime: 25000, spriteKey: 'tree_apple', scale: 1.0 },
-  // Schafwolle auf der Allmendeweide
+  // 1. Holz schlagen (Bauholz)
+  { id: 'node_wood_village_1', name: 'Eiche am Fronhof (Holz schlagen)', x: 12 * 16, y: 54 * 16, item: 'holz_balken', amount: 2, respawnTime: 18000, spriteKey: 'tree_oak_1', scale: 0.95 },
+  { id: 'node_wood_village_chop', name: 'Hackblock am Hof (Feuer- & Bauholz)', x: 14 * 16, y: 58 * 16, item: 'holz_balken', amount: 2, respawnTime: 15000, spriteKey: 'stump_axe', scale: 1.0 },
+  { id: 'node_wood_1', name: 'Bauholz-Eiche (Nordwald)', x: 60 * 16, y: 16 * 16, item: 'holz_balken', amount: 3, respawnTime: 20000, spriteKey: 'tree_oak_1', scale: 1.0 },
+  { id: 'node_wood_2', name: 'Alte Waldeiche', x: 42 * 16, y: 28 * 16, item: 'holz_balken', amount: 2, respawnTime: 20000, spriteKey: 'tree_oak_2', scale: 0.95 },
+  { id: 'node_wood_south', name: 'Auwald-Weide (Holz schlagen)', x: 38 * 16, y: 72 * 16, item: 'holz_balken', amount: 2, respawnTime: 18000, spriteKey: 'tree_willow', scale: 0.95 },
+
+  // 2. Steine abbauen (Bruchstein)
+  { id: 'node_stone_village', name: 'Feldstein-Fels (Steine abbauen)', x: 12 * 16, y: 64 * 16, item: 'feldstein', amount: 2, respawnTime: 18000, spriteKey: 'rock_big_a', scale: 1.0 },
+  { id: 'node_stone_cliff_1', name: 'Kalksteinbruch am Burgberg', x: 14 * 16, y: 36 * 16, item: 'feldstein', amount: 3, respawnTime: 20000, spriteKey: 'rock_cluster', scale: 1.0 },
+  { id: 'node_stone_river', name: 'Uferfelsen am Mühlenbach', x: 46 * 16, y: 52 * 16, item: 'feldstein', amount: 2, respawnTime: 18000, spriteKey: 'rock_moss_d', scale: 1.0 },
+  { id: 'node_stone_east', name: 'Findling an der Flurgrenze', x: 62 * 16, y: 36 * 16, item: 'feldstein', amount: 2, respawnTime: 18000, spriteKey: 'rock_big_b', scale: 1.0 },
+
+  // 3. Eisenerz schürfen (Eisen)
+  { id: 'node_iron_1', name: 'Raseneisenerz-Fels (Eisen abbauen)', x: 40 * 16, y: 52 * 16, item: 'eisen_barren', amount: 2, respawnTime: 22000, spriteKey: 'rock_big_c', scale: 0.75 },
+  { id: 'node_iron_2', name: 'Erzader am Burgfelsen', x: 8 * 16, y: 26 * 16, item: 'eisen_barren', amount: 2, respawnTime: 22000, spriteKey: 'rock_big_a', scale: 0.75 },
+
+  // 4. Ackerernte, Heu, Obst & Schafwolle
+  { id: 'node_crop_winter', name: 'Winterfrucht (Roggen ernten)', x: 72 * 16, y: 62 * 16, item: 'roggen_saat', amount: 3, respawnTime: 15000, spriteKey: 'crop_wheat_4', scale: 1.0 },
+  { id: 'node_crop_sommer', name: 'Sommerfrucht (Hafer ernten)', x: 82 * 16, y: 62 * 16, item: 'hafer_saat', amount: 3, respawnTime: 15000, spriteKey: 'crop_wheat_4', scale: 1.0 },
+  { id: 'node_hay_meadow', name: 'Allmendewiese (Heu gabeln)', x: 64 * 16, y: 66 * 16, item: 'heuballen', amount: 2, respawnTime: 16000, spriteKey: 'hay_bale', scale: 1.0 },
+  { id: 'node_fruit_tree', name: 'Streuobst-Apfelbaum (Proviant)', x: 42 * 16, y: 44 * 16, item: 'brot_fladen', amount: 2, respawnTime: 25000, spriteKey: 'tree_apple', scale: 1.0 },
   { id: 'node_sheep_wool', name: 'Schafschur an der Weide', x: 80 * 16, y: 72 * 16, item: 'wollballen', amount: 2, respawnTime: 20000, spriteKey: 'hay_bale', scale: 0.9 },
+  { id: 'node_kloster_wax', name: 'Kloster-Imkerei (Siegelwachs)', x: 66 * 16, y: 22 * 16, item: 'lehnssiegel_wachs', amount: 2, respawnTime: 22000, spriteKey: 'barrel_water', scale: 1.0 },
 ];

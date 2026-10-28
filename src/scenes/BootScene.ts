@@ -90,6 +90,7 @@ export class BootScene extends Phaser.Scene {
       'anvil',
       'crop_wheat_4',
       'keep_fences',
+      'fence_gate',
       'keep_garden',
       'flowerbed_gold',
       'flowerbed_blue',

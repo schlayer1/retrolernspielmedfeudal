@@ -23,6 +23,7 @@ export type ModalType =
   | 'inventory'
   | 'craft'
   | 'build'
+  | 'trade'
   | 'lexicon'
   | 'timeline'
   | 'certificate'
@@ -35,10 +36,12 @@ export class UIScene extends Phaser.Scene {
   private uiRoot!: HTMLDivElement;
   private hudHeader!: HTMLDivElement;
   private questBox!: HTMLDivElement;
+  private hotbarEl!: HTMLDivElement;
   private modalOverlay!: HTMLDivElement;
   private toastContainer!: HTMLDivElement;
   private dilemmaModal = new DilemmaModal();
   private printSheet = new PrintSheet();
+  private lastActionKeyMs = 0;
 
   private activeRelic: MedievalRelic | null = null;
   private isRelicFlipped = false;
@@ -86,16 +89,22 @@ export class UIScene extends Phaser.Scene {
 
   private registerGlobalHooks(): void {
     const win = window as any;
+    win.__isModalOpen = () => this.activeModal !== 'none';
     win.__openMentorDialog = (ch: ChapterData) => this.openMentorDialog(ch);
     win.__openMentorDialogForCurrent = () => {
       const cur = MEDIEVAL_CHAPTERS.find((c) => c.id === gameState.chapter);
       if (cur) this.openMentorDialog(cur);
     };
+    win.__advanceDialog = () => this.advanceDialog();
     win.__openArtifactInspector = (rel: MedievalRelic) => this.openArtifactInspector(rel);
     win.__openStation = (stationId: string) => this.openStation(stationId);
     win.__showToast = (msg: string) => this.showToast(msg);
     win.__toggleModal = (mod: string) => this.handleShortcutKey(mod.toUpperCase());
     win.__closeModal = () => this.closeModal();
+    win.__eatFood = () => {
+      const msg = gameState.eat();
+      this.showToast(msg);
+    };
     win.__printHefterSheet = () => this.printSheet.print();
     win.__MEDIEVAL_CHAPTERS = MEDIEVAL_CHAPTERS;
     win.__MEDIEVAL_RELICS = MEDIEVAL_RELICS;
@@ -119,6 +128,10 @@ export class UIScene extends Phaser.Scene {
     this.questBox.id = 'quest-tracker';
     this.questBox.className = 'quest-tracker-box';
 
+    this.hotbarEl = document.createElement('div');
+    this.hotbarEl.id = 'hud-hotbar';
+    this.hotbarEl.className = 'hud-hotbar';
+
     this.modalOverlay = document.createElement('div');
     this.modalOverlay.id = 'modal-overlay';
     this.modalOverlay.className = 'modal-backdrop';
@@ -130,6 +143,7 @@ export class UIScene extends Phaser.Scene {
 
     this.uiRoot.appendChild(this.hudHeader);
     this.uiRoot.appendChild(this.questBox);
+    this.uiRoot.appendChild(this.hotbarEl);
     this.uiRoot.appendChild(this.modalOverlay);
     this.uiRoot.appendChild(this.toastContainer);
   }
@@ -152,23 +166,34 @@ export class UIScene extends Phaser.Scene {
 
       if (this.activeModal === 'start') return;
 
-      // When mentor dialog is open, E, Space or Enter advances dialog
-      if (this.activeModal === 'dialog' && (key === 'E' || e.code === 'Space' || e.key === 'Enter')) {
-        e.preventDefault();
-        this.advanceDialog();
-        return;
-      }
+      // Single source of truth for [E], [Space], [Enter]
+      if (key === 'E' || e.code === 'Space' || e.key === 'Enter') {
+        const now = Date.now();
+        if (now - this.lastActionKeyMs < 160) return;
+        this.lastActionKeyMs = now;
 
-      // Overworld interaction shortcuts [E], [SPACE], [ENTER]
-      if (this.activeModal === 'none' && (key === 'E' || e.code === 'Space' || e.key === 'Enter')) {
-        const win = window as any;
-        if (win.__triggerInteraction) {
-          win.__triggerInteraction();
+        if (this.activeModal === 'dialog') {
+          e.preventDefault();
+          this.advanceDialog();
+          return;
         }
-        return;
+        if (this.activeModal === 'inspector') {
+          e.preventDefault();
+          this.closeModal();
+          this.showToast('🏺 Fundstück im Beutel verstaut!');
+          return;
+        }
+        if (this.activeModal === 'none') {
+          e.preventDefault();
+          const win = window as any;
+          if (win.__triggerInteraction) {
+            win.__triggerInteraction();
+          }
+          return;
+        }
       }
 
-      if (['I', 'C', 'B', 'L', 'Z', 'U', 'P', 'M'].includes(key)) {
+      if (['I', 'C', 'B', 'H', 'F', 'L', 'Z', 'U', 'P', 'M'].includes(key)) {
         this.handleShortcutKey(key);
       }
     });
@@ -184,6 +209,11 @@ export class UIScene extends Phaser.Scene {
       const isMuted = sound.toggleMute();
       this.showToast(isMuted ? '🔇 Musik stummgeschaltet' : '🔊 Musik aktiv');
       this.renderHUD();
+      return;
+    }
+    if (key === 'F') {
+      const msg = gameState.eat();
+      this.showToast(msg);
       return;
     }
     if (key === 'P') {
@@ -204,6 +234,11 @@ export class UIScene extends Phaser.Scene {
     if (key === 'B') {
       if (this.activeModal === 'build') this.closeModal();
       else this.openBuildModal();
+      return;
+    }
+    if (key === 'H') {
+      if (this.activeModal === 'trade') this.closeModal();
+      else this.openTradeModal();
       return;
     }
     if (key === 'L') {
@@ -235,24 +270,57 @@ export class UIScene extends Phaser.Scene {
   }
 
   // =========================================================================
-  // HUD & QUEST TRACKER
+  // HUD (STEINZEIT-STATUSBALKEN + SHORTCUTS + UNTERES HOTBAR-INVENTAR)
   // =========================================================================
   public renderHUD(): void {
     const curCh = MEDIEVAL_CHAPTERS.find((c) => c.id === gameState.chapter);
-    const pts = gameState.getEpochenPunkte();
     const relCount = gameState.discoveredRelics.size;
+    const roleLabel =
+      gameState.role === 'knappe'
+        ? 'Schildknappe'
+        : gameState.role === 'skriptor'
+        ? 'Klosterskriptor'
+        : 'Hofbauer';
+
+    const foodPct = Math.max(0, Math.min(100, Math.round(gameState.food)));
+    const safetyPct = Math.max(0, Math.min(100, Math.round(gameState.safety)));
+    const knowPct = Math.max(0, Math.min(100, Math.round(gameState.knowledge)));
 
     this.hudHeader.innerHTML = `
       <div class="hud-left">
         <span class="hud-ch-badge">⚔️ Kapitel ${curCh?.number || 1}: ${curCh?.title || 'Das Mittelalter'}</span>
-        <span class="hud-player-badge">👤 ${gameState.playerName} (${gameState.gender === 'male' ? 'Konrad' : 'Mathilda'})</span>
-        <span class="hud-pts-badge">🏆 ${pts} Pkt.</span>
+        <span class="hud-player-badge">👤 ${gameState.playerName} (${roleLabel})</span>
+        <div class="hud-status-bars" style="display:flex;align-items:center;gap:10px;background:rgba(15,10,6,0.75);padding:3px 10px;border-radius:6px;border:1px solid rgba(217,119,6,0.45);">
+          <div class="hud-stat-pill" title="Nahrung & Versorgung (Taste F zum Essen)" style="display:flex;align-items:center;gap:5px;font-size:11px;color:#fde68a;">
+            <span>🍞 Nahrung</span>
+            <div style="width:52px;height:7px;background:#291d12;border-radius:4px;overflow:hidden;border:1px solid rgba(251,191,36,0.35);">
+              <div style="width:${foodPct}%;height:100%;background:linear-gradient(90deg,#d97706,#fbbf24);"></div>
+            </div>
+            <strong style="font-size:10px;">${foodPct}%</strong>
+          </div>
+          <div class="hud-stat-pill" title="Schutz & Ordnung (steigt durch Burgbau & Infrastruktur)" style="display:flex;align-items:center;gap:5px;font-size:11px;color:#86efac;">
+            <span>🛡️ Schutz</span>
+            <div style="width:52px;height:7px;background:#11261b;border-radius:4px;overflow:hidden;border:1px solid rgba(74,222,128,0.35);">
+              <div style="width:${safetyPct}%;height:100%;background:linear-gradient(90deg,#16a34a,#4ade80);"></div>
+            </div>
+            <strong style="font-size:10px;">${safetyPct}%</strong>
+          </div>
+          <div class="hud-stat-pill" title="Wissen & Gelehrsamkeit (steigt durch Relikte, Lexikon & Handwerk)" style="display:flex;align-items:center;gap:5px;font-size:11px;color:#93c5fd;">
+            <span>📖 Wissen</span>
+            <div style="width:52px;height:7px;background:#111d33;border-radius:4px;overflow:hidden;border:1px solid rgba(96,165,250,0.35);">
+              <div style="width:${knowPct}%;height:100%;background:linear-gradient(90deg,#2563eb,#60a5fa);"></div>
+            </div>
+            <strong style="font-size:10px;">${knowPct}%</strong>
+          </div>
+        </div>
         <span class="hud-relic-badge">🏺 ${relCount}/5 Relikte</span>
       </div>
       <div class="hud-right">
         <button class="hud-btn" onclick="window.__toggleModal('I')">🎒 Beutel [I]</button>
-        <button class="hud-btn" onclick="window.__toggleModal('C')">🔨 Schmiede [C]</button>
+        <button class="hud-btn" onclick="window.__toggleModal('C')">🔨 Handwerk [C]</button>
         <button class="hud-btn" onclick="window.__toggleModal('B')">🏰 Bauen [B]</button>
+        <button class="hud-btn" onclick="window.__toggleModal('H')">⚖️ Markt [H]</button>
+        <button class="hud-btn" onclick="window.__eatFood()">🍞 Essen [F]</button>
         <button class="hud-btn" onclick="window.__toggleModal('L')">📖 Lexikon [L]</button>
         <button class="hud-btn" onclick="window.__toggleModal('Z')">⏳ Zeit [Z]</button>
         <button class="hud-btn" onclick="window.__toggleModal('U')">📜 Urkunde [U]</button>
@@ -260,6 +328,51 @@ export class UIScene extends Phaser.Scene {
         <button class="hud-btn hud-btn-accent" onclick="window.__toggleModal('P')">⏸️ Menü [P]</button>
       </div>
     `;
+
+    // Render Bottom Inventory Hotbar (Steinzeit / Griechenland Standard)
+    if (this.hotbarEl) {
+      const shortNames: Record<string, string> = {
+        brot_fladen: 'Dorfbrot',
+        mehl_sack: 'Mehl',
+        roggen_saat: 'Roggen',
+        hafer_saat: 'Hafer',
+        heuballen: 'Wiesenheu',
+        holz_balken: 'Bauholz',
+        feldstein: 'Bruchstein',
+        eisen_barren: 'Eisen',
+        wasser_eimer: 'Wasser',
+        wollballen: 'Wolle',
+        pergament_bogen: 'Pergament',
+        lehnssiegel_wachs: 'Siegelwachs',
+        heilsalbe_kraeuter: 'Heilsalbe',
+        pflugmesser_eisen: 'Pflugmesser',
+        ritter_hufeisen: 'Hufeisen',
+        wappenschild_rohling: 'Schild',
+        silber_pfennig: 'Silberdenar',
+      };
+      const entries = Object.entries(gameState.inventory).filter(([, count]) => (count || 0) > 0);
+      const slotsHtml = entries
+        .map(([k, count]) => {
+          const def = MEDIEVAL_ITEMS[k as MedievalItemId];
+          if (!def) return '';
+          const label = shortNames[k] || def.name.split(' ')[0];
+          return `
+            <div class="hotbar-slot" title="${def.name} (${count}x)" onclick="window.__toggleModal('I')">
+              <img src="${def.icon}" alt="${def.name}" class="hotbar-icon" />
+              <span class="hotbar-label">${label}</span>
+              <span class="hotbar-qty">x${count}</span>
+            </div>
+          `;
+        })
+        .join('');
+
+      this.hotbarEl.innerHTML = `
+        <div class="hotbar-items-row">
+          ${slotsHtml || '<span style="font-size:11px;color:#d6d3d1;padding:0 8px;">Beutel leer – sammle Holz, Steine oder Getreide mit [E]!</span>'}
+          <button class="hotbar-bag-btn" onclick="window.__toggleModal('I')">🎒 Beutel [I]</button>
+        </div>
+      `;
+    }
   }
 
   public renderQuestTracker(): void {
@@ -1138,14 +1251,120 @@ export class UIScene extends Phaser.Scene {
     this.modalOverlay.querySelectorAll('.btn-craft').forEach((btn) => {
       btn.addEventListener('click', (e) => {
         const id = (e.currentTarget as HTMLElement).dataset.id || '';
+        const bDef = MEDIEVAL_BUILDINGS.find((b) => b.id === id);
         if (gameState.build(id)) {
           sound.success();
           gameState.setObjectiveProgress(gameState.chapter, 3, true);
-          this.showToast('🏰 Bauwerk erfolgreich errichtet!');
+          this.showToast(`🏰 ${bDef?.title || 'Bauwerk'} in der Spielwelt errichtet!`);
           this.openBuildModal();
         } else {
           sound.click();
           this.showToast('❌ Fehlende Baustoffe oder Vorbedingungen!');
+        }
+      });
+    });
+  }
+
+  public openTradeModal(): void {
+    this.activeModal = 'trade';
+    this.touchControls.setVisible(false);
+    this.modalOverlay.style.display = 'flex';
+
+    const trades: Array<{
+      id: string;
+      giveItem: MedievalItemId;
+      giveQty: number;
+      getItem: MedievalItemId;
+      getQty: number;
+      desc: string;
+    }> = [
+      {
+        id: 't_stein_holz',
+        giveItem: 'feldstein',
+        giveQty: 2,
+        getItem: 'holz_balken',
+        getQty: 2,
+        desc: 'Tausche behauenen Bruchstein beim Zimmermann gegen Eichen-Bauholz.',
+      },
+      {
+        id: 't_holz_eisen',
+        giveItem: 'holz_balken',
+        giveQty: 3,
+        getItem: 'eisen_barren',
+        getQty: 2,
+        desc: 'Tausche Brennholz & Balken beim Schmied gegen geschmiedetes Eisen.',
+      },
+      {
+        id: 't_roggen_mehl',
+        giveItem: 'roggen_saat',
+        giveQty: 2,
+        getItem: 'mehl_sack',
+        getQty: 2,
+        desc: 'Lass beim Müller Roggenkorn direkt gegen feines Roggenmehl tauschen.',
+      },
+      {
+        id: 't_heu_brot',
+        giveItem: 'heuballen',
+        giveQty: 2,
+        getItem: 'brot_fladen',
+        getQty: 2,
+        desc: 'Tausche Wiesenheu am Marktstand gegen frisches Dorfbrot.',
+      },
+      {
+        id: 't_stein_wachs',
+        giveItem: 'feldstein',
+        giveQty: 2,
+        getItem: 'lehnssiegel_wachs',
+        getQty: 1,
+        desc: 'Tausche Mauersteine beim Klosterboten gegen rotes Siegelwachs.',
+      },
+    ];
+
+    this.modalOverlay.innerHTML = `
+      <div class="modal-card">
+        <div class="modal-header">
+          <span class="modal-tag">⚖️ BURGMARKT & TAUSCHHANDEL [H]</span>
+          <button class="modal-close-btn" onclick="window.__toggleModal('ESC')">✕ Schließen</button>
+        </div>
+        <div class="craft-list">
+          ${trades
+            .map((t) => {
+              const canTrade = (gameState.inventory[t.giveItem] || 0) >= t.giveQty;
+              const giveDef = MEDIEVAL_ITEMS[t.giveItem];
+              const getDef = MEDIEVAL_ITEMS[t.getItem];
+              return `
+              <div class="recipe-card ${canTrade ? '' : 'disabled'}">
+                <img src="${getDef?.icon || '/assets/icons/holz.png'}" class="recipe-icon" />
+                <div class="recipe-info">
+                  <strong>${t.getQty}x ${getDef?.name || t.getItem} ertauschen</strong>
+                  <p>${t.desc}</p>
+                  <div class="cost-row">
+                    Einsatz: ${t.giveQty}x ${giveDef?.name || t.giveItem} (im Beutel: ${gameState.inventory[t.giveItem] || 0})
+                  </div>
+                </div>
+                <button class="btn-craft ${canTrade ? '' : 'disabled'}" data-id="${t.id}">
+                  Tauschen
+                </button>
+              </div>
+            `;
+            })
+            .join('')}
+        </div>
+      </div>
+    `;
+
+    this.modalOverlay.querySelectorAll('.btn-craft').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        const id = (e.currentTarget as HTMLElement).dataset.id || '';
+        const t = trades.find((x) => x.id === id);
+        if (t && gameState.removeInventory(t.giveItem, t.giveQty)) {
+          gameState.addInventory(t.getItem, t.getQty);
+          sound.questStep();
+          this.showToast(`⚖️ Getauscht: +${t.getQty} ${MEDIEVAL_ITEMS[t.getItem]?.name}!`);
+          this.openTradeModal();
+        } else {
+          sound.click();
+          this.showToast('❌ Nicht genügend Tauschware im Beutel!');
         }
       });
     });

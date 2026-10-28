@@ -44,7 +44,7 @@ export class CompanionManager {
     // 1. Secret-of-Evermore Spürsinn (< 110px) zu unentdeckten Relikten
     if (this.alertCooldown <= 0 && this.state !== 'petting') {
       for (const t of targets) {
-        if (!t.discovered && (t.kind === 'relic' || t.kind === 'resource')) {
+        if (!t.discovered && t.kind === 'relic') {
           const tx = t.x ?? t.sprite?.x;
           const ty = t.y ?? t.sprite?.y;
           if (tx !== undefined && ty !== undefined) {

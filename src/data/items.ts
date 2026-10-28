@@ -4,6 +4,7 @@ export type MedievalItemId =
   | 'brot_fladen'
   | 'heuballen'
   | 'holz_balken'
+  | 'feldstein'
   | 'eisen_barren'
   | 'silber_pfennig'
   | 'pergament_bogen'
@@ -64,6 +65,14 @@ export const MEDIEVAL_ITEMS: Record<MedievalItemId, MedievalItem> = {
     category: 'rohstoff',
     icon: '/assets/icons/holz.png',
     description: 'Behauenes Eichenholz aus dem grundherrlichen Wald für Fachwerk und Wehranlagen.',
+    epochenwert: 3,
+  },
+  feldstein: {
+    id: 'feldstein',
+    name: 'Behauener Bruchstein',
+    category: 'rohstoff',
+    icon: '/assets/icons/tuffstein.png',
+    description: 'Am Steinbruch und an den Burgfelsen gebrochener Kalk- und Feldstein für Grundmauern, Brunnen und Backöfen.',
     epochenwert: 3,
   },
   eisen_barren: {

@@ -91,11 +91,51 @@ async function run() {
     await page.keyboard.press('KeyB');
     await sleep(400);
     await page.evaluate(() => {
-      window.__gameState.build('dorfgatter');
-      window.__gameState.setObjectiveProgress(1, 3, true);
+      const btn = document.querySelector('.btn-craft[data-id="dorfgatter"]');
+      if (btn) btn.click();
     });
     await page.keyboard.press('Escape');
     await sleep(300);
+
+    // Verify dorfgatter actually spawned in WorldScene!
+    const gatterSpawned = await page.evaluate(() => {
+      const world = window.__GAME__.scene.getScene('WorldScene');
+      return world.spawnedBuildings && world.spawnedBuildings.has('dorfgatter');
+    });
+    console.log('9b. Viehgatter spawned in WorldScene:', gatterSpawned);
+    if (!gatterSpawned) throw new Error('Viehgatter (dorfgatter) did NOT spawn in WorldScene!');
+
+    // Verify Water & Bridge Collision
+    const collisionCheck = await page.evaluate(() => {
+      const world = window.__GAME__.scene.getScene('WorldScene');
+      return {
+        riverBlocked: world.isWalkable(52 * 16, 50 * 16) === false,
+        bridge1Walkable: world.isWalkable(52 * 16, 40 * 16) === true,
+        bridge2Walkable: world.isWalkable(52 * 16, 64 * 16) === true,
+        houseBlocked: world.isWalkable(18 * 16, 50 * 16) === false,
+      };
+    });
+    console.log('9c. Collision Check:', collisionCheck);
+    if (!collisionCheck.riverBlocked || !collisionCheck.bridge1Walkable || !collisionCheck.bridge2Walkable || !collisionCheck.houseBlocked) {
+      throw new Error('Water or building collision check failed: ' + JSON.stringify(collisionCheck));
+    }
+
+    // Verify HUD Status Bars & Hotbar exist and no "Konrad (Konrad)"
+    const hudCheck = await page.evaluate(() => {
+      const topHtml = document.querySelector('.hud-top-bar')?.innerHTML || '';
+      const hotbarHtml = document.querySelector('#hud-hotbar')?.innerHTML || '';
+      return {
+        hasNahrung: topHtml.includes('Nahrung'),
+        hasSchutz: topHtml.includes('Schutz'),
+        hasWissen: topHtml.includes('Wissen'),
+        noDuplicateName: !topHtml.includes('Konrad (Konrad)'),
+        hasHotbarSlots: hotbarHtml.includes('hotbar-slot'),
+      };
+    });
+    console.log('9d. HUD & Hotbar Check:', hudCheck);
+    if (!hudCheck.hasNahrung || !hudCheck.hasSchutz || !hudCheck.hasWissen || !hudCheck.noDuplicateName || !hudCheck.hasHotbarSlots) {
+      throw new Error('HUD or Hotbar verification failed: ' + JSON.stringify(hudCheck));
+    }
 
     // Verify all 4 steps are complete
     const allDone = await page.evaluate(() => {

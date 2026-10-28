@@ -25,6 +25,8 @@ export interface InteractiveTarget {
   questObjectiveIndex?: number;
   questMessage?: string;
   actionTip?: string;
+  discovered?: boolean;
+  nodeDef?: ResourceNode;
 }
 
 export class WorldScene extends Phaser.Scene {
@@ -47,6 +49,11 @@ export class WorldScene extends Phaser.Scene {
   private activeTarget: InteractiveTarget | null = null;
   private labelDiv: HTMLElement | null = null;
 
+  private spawnedBuildings = new Set<string>();
+  private buildingPlotSprites = new Map<string, Phaser.GameObjects.GameObject[]>();
+  private relicVisuals = new Map<string, Phaser.GameObjects.GameObject[]>();
+  private resourceState = new Map<string, { sprite: Phaser.GameObjects.Image; readyAt: number }>();
+
   public wildlifeManager!: WildlifeManager;
   public livingWorldManager!: LivingWorldManager;
   public chapterBanner!: ChapterBanner;
@@ -57,8 +64,11 @@ export class WorldScene extends Phaser.Scene {
   private lastBannerChapter = -1;
   private isDialogZoomed = false;
 
-  // Bridge bounds for footstep audio
-  private bridgeBounds = [{ x: 48 * 16, y: 38 * 16, w: 8 * 16, h: 5 * 16 }];
+  // Bridge bounds for footstep audio & river crossing
+  private bridgeBounds = [
+    { x: 48 * 16, y: 38 * 16, w: 8 * 16, h: 5 * 16 },
+    { x: 48 * 16, y: 62 * 16, w: 8 * 16, h: 4 * 16 },
+  ];
 
   constructor() {
     super('WorldScene');
@@ -227,15 +237,17 @@ export class WorldScene extends Phaser.Scene {
         const riverCenterX = 52 + Math.sin(ty * 0.12) * 2.5;
         const distRiver = Math.abs(tx - riverCenterX);
 
-        // Wooden Bridge at y: 38.5..42.5
-        const isBridge = distRiver < 3.2 && ty >= 38.5 && ty <= 42.5;
+        // Wooden Bridges at y: 38.5..42.5 (Marktbrücke) and y: 62.5..65.5 (Mühlensteg)
+        const isBridge =
+          distRiver < 3.2 && ((ty >= 38.5 && ty <= 42.5) || (ty >= 62.5 && ty <= 65.5));
 
         // Roads
         const dCastleRoad = this.distToSegment(tx, ty, 28, 28, 50, 40);
         const dVillageRoad = this.distToSegment(tx, ty, 26, 58, 50, 40);
         const dKlosterRoad = this.distToSegment(tx, ty, 54, 40, 78, 22);
         const dFarmRoad = this.distToSegment(tx, ty, 54, 40, 70, 56);
-        const minRoadDist = Math.min(dCastleRoad, dVillageRoad, dKlosterRoad, dFarmRoad);
+        const dMillBridgeRoad = this.distToSegment(tx, ty, 44, 64, 66, 62);
+        const minRoadDist = Math.min(dCastleRoad, dVillageRoad, dKlosterRoad, dFarmRoad, dMillBridgeRoad);
 
         // Castle Plateau (tx: 16..36, ty: 12..28)
         const inCastleCourt = tx >= 16 && tx <= 36 && ty >= 12 && ty <= 28;
@@ -339,7 +351,35 @@ export class WorldScene extends Phaser.Scene {
     const tx = x / 16;
     const ty = y / 16;
     const riverCenterX = 52 + Math.sin(ty * 0.12) * 2.5;
-    return Math.abs(tx - riverCenterX) < 2.0;
+    return Math.abs(tx - riverCenterX) < 1.95;
+  }
+
+  private isOnBridge(x: number, y: number): boolean {
+    const ty = y / 16;
+    return (ty >= 38.2 && ty <= 42.8) || (ty >= 62.2 && ty <= 65.8);
+  }
+
+  private isWalkable(x: number, y: number): boolean {
+    if (x < 20 || x > (this.mapW - 2) * 16 || y < 20 || y > (this.mapH - 2) * 16) return false;
+    // Block river water unless on one of the two wooden bridges
+    if (this.isPointInRiver(x, y) && !this.isOnBridge(x, y)) {
+      return false;
+    }
+    const tx = x / 16;
+    const ty = y / 16;
+    // Solid building roof/wall footprints (leaving front doors & mentors accessible)
+    if (tx >= 17.5 && tx <= 22.5 && ty >= 11.5 && ty <= 15.2) return false; // Bergfried
+    if (tx >= 35.0 && tx <= 39.0 && ty >= 15.0 && ty <= 17.3) return false; // Marstall
+    if (tx >= 75.5 && tx <= 80.5 && ty >= 11.5 && ty <= 15.2) return false; // Klosterkirche
+    if (tx >= 86.2 && tx <= 89.8 && ty >= 17.0 && ty <= 19.3) return false; // Skriptorium
+    if (tx >= 16.2 && tx <= 19.8 && ty >= 49.0 && ty <= 51.3) return false; // Fronhof-Meierhaus
+    if (tx >= 30.2 && tx <= 33.8 && ty >= 49.0 && ty <= 51.3) return false; // Dorfschmiede
+    if (tx >= 20.0 && tx <= 24.0 && ty >= 64.5 && ty <= 67.2) return false; // Dorfgasthof
+    if (tx >= 30.2 && tx <= 33.8 && ty >= 65.0 && ty <= 67.3) return false; // Bauernkate
+    if (tx >= 42.2 && tx <= 45.8 && ty >= 60.5 && ty <= 63.1) return false; // Wassermühle
+    if (tx >= 64.0 && tx <= 68.0 && ty >= 46.5 && ty <= 49.2) return false; // Zehntscheune
+    if (tx >= 86.8 && tx <= 89.2 && ty >= 44.5 && ty <= 47.2) return false; // Windmühle
+    return true;
   }
 
   private isOnRoad(x: number, y: number): boolean {
@@ -531,23 +571,110 @@ export class WorldScene extends Phaser.Scene {
       }
     }
 
-    // 2. Dynamic Erected Buildings (from gameState.builtBuildings)
-    for (const bId of gameState.builtBuildings) {
-      const bDef = MEDIEVAL_BUILDINGS.find((b) => b.id === bId);
-      if (bDef) {
+    // 2. Dynamic Erected Buildings & Unbuilt Plot Markers
+    this.syncBuiltBuildings(false);
+  }
+
+  private syncBuiltBuildings(animateNew = true): void {
+    for (const bDef of MEDIEVAL_BUILDINGS) {
+      const isBuilt = gameState.builtBuildings.has(bDef.id);
+
+      if (isBuilt && !this.spawnedBuildings.has(bDef.id)) {
+        this.spawnedBuildings.add(bDef.id);
+
+        // Remove unbuilt plot marker if present
+        const plotObjs = this.buildingPlotSprites.get(bDef.id);
+        if (plotObjs) {
+          plotObjs.forEach((o) => o.destroy());
+          this.buildingPlotSprites.delete(bDef.id);
+        }
+
+        // Spawn main building sprite
         let bImg: Phaser.GameObjects.Image | null = null;
         if (this.textures.exists(bDef.spriteKey)) {
           bImg = this.add.image(bDef.x, bDef.y, bDef.spriteKey);
         } else if (this.textures.get('world_atlas')?.has(bDef.spriteKey)) {
           bImg = this.add.image(bDef.x, bDef.y, 'world_atlas', bDef.spriteKey);
         }
+
+        const spawnedList: Phaser.GameObjects.Image[] = [];
         if (bImg) {
           bImg.setOrigin(0.5, 0.9);
-          bImg.setScale(bDef.scale);
+          bImg.setScale(bDef.id === 'dorfgatter' ? 1.25 : bDef.scale);
           bImg.setDepth(bDef.y);
+          spawnedList.push(bImg);
         }
+
+        // Special composite enclosure for Viehgatter (dorfgatter) so a full cattle fence & trough appear
+        if (bDef.id === 'dorfgatter') {
+          if (this.textures.exists('fence_gate')) {
+            const leftFence = this.add
+              .image(bDef.x - 26, bDef.y, 'fence_gate')
+              .setOrigin(0.5, 0.9)
+              .setScale(1.1)
+              .setDepth(bDef.y);
+            const rightFence = this.add
+              .image(bDef.x + 26, bDef.y, 'fence_gate')
+              .setOrigin(0.5, 0.9)
+              .setScale(1.1)
+              .setDepth(bDef.y);
+            spawnedList.push(leftFence, rightFence);
+          }
+          if (this.textures.exists('farm_animal_enclosure')) {
+            const trough = this.add
+              .image(bDef.x, bDef.y - 14, 'farm_animal_enclosure')
+              .setOrigin(0.5, 0.9)
+              .setScale(1.15)
+              .setDepth(bDef.y - 2);
+            spawnedList.push(trough);
+          }
+        }
+
+        if (animateNew && spawnedList.length > 0) {
+          spawnedList.forEach((s) => {
+            const targetScale = s.scaleX;
+            s.setScale(0.1);
+            this.tweens.add({
+              targets: s,
+              scaleX: targetScale,
+              scaleY: targetScale,
+              duration: 420,
+              ease: 'Back.easeOut',
+            });
+          });
+          this.spawnFloatingText(bDef.x, bDef.y - 22, `🏰 ${bDef.title} errichtet!`, '#fde68a');
+        }
+      } else if (!isBuilt && !this.buildingPlotSprites.has(bDef.id)) {
+        // Subtle foundation plot marker on the map so player knows where the building will appear
+        const g = this.add.graphics();
+        g.lineStyle(1.5, 0xfbbf24, 0.75);
+        g.fillStyle(0x78350f, 0.22);
+        g.fillRoundedRect(bDef.x - 16, bDef.y - 16, 32, 18, 4);
+        g.strokeRoundedRect(bDef.x - 16, bDef.y - 16, 32, 18, 4);
+        g.setDepth(bDef.y - 10);
+        this.buildingPlotSprites.set(bDef.id, [g]);
       }
     }
+  }
+
+  public spawnFloatingText(x: number, y: number, msg: string, color = '#fef08a'): void {
+    const txt = this.add.text(x, y, msg, {
+      fontFamily: 'monospace',
+      fontSize: '10px',
+      color,
+      stroke: '#1c1309',
+      strokeThickness: 3,
+      fontStyle: 'bold',
+    });
+    txt.setOrigin(0.5, 1).setDepth(9999);
+    this.tweens.add({
+      targets: txt,
+      y: y - 24,
+      alpha: 0,
+      duration: 1400,
+      ease: 'Cubic.easeOut',
+      onComplete: () => txt.destroy(),
+    });
   }
 
   private placeResourceNodes(): void {
@@ -563,10 +690,26 @@ export class WorldScene extends Phaser.Scene {
         if (node.scale) spr.setScale(node.scale);
         spr.setDepth(node.y);
 
+        this.resourceState.set(node.id, { sprite: spr, readyAt: 0 });
         this.livingWorldManager.registerResourceHotspot(node.x, node.y);
         if (node.spriteKey.startsWith('tree_') || node.spriteKey.startsWith('bush_')) {
           this.livingWorldManager.registerFlora(spr);
         }
+      }
+    }
+  }
+
+  private syncRelicVisuals(): void {
+    for (const rel of MEDIEVAL_RELICS) {
+      const isDiscovered = gameState.discoveredRelics.has(rel.id);
+      if (isDiscovered) {
+        const objs = this.relicVisuals.get(rel.id);
+        if (objs) {
+          objs.forEach((o) => o.destroy());
+          this.relicVisuals.delete(rel.id);
+        }
+        const t = this.targets.find((x) => x.id === `relic_${rel.id}`);
+        if (t) t.discovered = true;
       }
     }
   }
@@ -591,25 +734,44 @@ export class WorldScene extends Phaser.Scene {
     // Spawn aktiven Mentor-Sprite für aktuelles Kapitel
     this.updateActiveMentorSprite();
 
-    // 2. Relikte auf der Karte (mit In-World-Marker)
+    // 2. Relikte auf der Karte (mit echtem Relikt-Sprite + Leucht-Marker, jederzeit auswählbar!)
     for (const rel of MEDIEVAL_RELICS) {
       const isDiscovered = gameState.discoveredRelics.has(rel.id);
-      if (!isDiscovered && this.textures.exists('relic_marker_glow')) {
-        const marker = this.add.sprite(rel.x, rel.y, 'relic_marker_glow');
-        marker.setOrigin(0.5, 0.5);
-        marker.setScale(0.85);
-        marker.setDepth(rel.y);
+      if (!isDiscovered) {
+        const objs: Phaser.GameObjects.GameObject[] = [];
+        if (this.textures.exists('relic_marker_glow')) {
+          const marker = this.add.sprite(rel.x, rel.y, 'relic_marker_glow');
+          marker.setOrigin(0.5, 0.5);
+          marker.setScale(0.75);
+          marker.setDepth(rel.y - 1);
 
-        // Pulsing glow
-        this.tweens.add({
-          targets: marker,
-          scale: 1.05,
-          alpha: { from: 0.7, to: 1.0 },
-          yoyo: true,
-          repeat: -1,
-          duration: 900,
-          ease: 'Sine.easeInOut',
-        });
+          this.tweens.add({
+            targets: marker,
+            scale: 0.95,
+            alpha: { from: 0.55, to: 0.95 },
+            yoyo: true,
+            repeat: -1,
+            duration: 950,
+            ease: 'Sine.easeInOut',
+          });
+          objs.push(marker);
+        }
+        if (this.textures.exists(rel.id)) {
+          const relImg = this.add.image(rel.x, rel.y - 3, rel.id);
+          relImg.setOrigin(0.5, 0.6);
+          relImg.setScale(0.65);
+          relImg.setDepth(rel.y + 1);
+          this.tweens.add({
+            targets: relImg,
+            y: rel.y - 6,
+            yoyo: true,
+            repeat: -1,
+            duration: 1100,
+            ease: 'Sine.easeInOut',
+          });
+          objs.push(relImg);
+        }
+        this.relicVisuals.set(rel.id, objs);
       }
 
       this.targets.push({
@@ -619,14 +781,21 @@ export class WorldScene extends Phaser.Scene {
         sub: 'Archäologischer Leitfund',
         x: rel.x,
         y: rel.y,
-        minChapter: rel.unlockedChapter,
+        minChapter: 1, // Alle Relikte auf der Karte sind jederzeit untersuch- & sammelbar!
         relic: rel,
+        discovered: isDiscovered,
         actionTip: '[E] Fundstück bergen & untersuchen',
       });
     }
 
-    // 3. Ressourcen-Hotspots
+    // 3. Ressourcen-Hotspots (Holz schlagen, Steine abbauen, Eisenerz, Ernte)
     for (const r of RESOURCE_NODES) {
+      let actionLabel = '[E] Ernten & Sammeln';
+      if (r.item === 'holz_balken') actionLabel = '[E] Holz schlagen (+Bauholz)';
+      else if (r.item === 'feldstein') actionLabel = '[E] Steine abbauen (+Bruchstein)';
+      else if (r.item === 'eisen_barren') actionLabel = '[E] Eisenerz abbauen (+Eisen)';
+      else if (r.item === 'wollballen') actionLabel = '[E] Schafwolle scheren';
+
       this.targets.push({
         id: `res_${r.id}`,
         kind: 'resource',
@@ -636,7 +805,23 @@ export class WorldScene extends Phaser.Scene {
         y: r.y,
         minChapter: 1,
         itemId: r.item as MedievalItemId,
-        actionTip: '[E] Ernten & Sammeln',
+        nodeDef: r,
+        actionTip: actionLabel,
+      });
+    }
+
+    // 3b. Bauplätze für errichtbare Bauwerke
+    for (const bDef of MEDIEVAL_BUILDINGS) {
+      this.targets.push({
+        id: `plot_${bDef.id}`,
+        kind: 'building_plot',
+        name: `Bauplatz: ${bDef.title}`,
+        sub: bDef.name,
+        x: bDef.x,
+        y: bDef.y,
+        minChapter: 1,
+        buildingId: bDef.id,
+        actionTip: '[E] Bauwerk errichten / ansehen',
       });
     }
 
@@ -751,7 +936,11 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private onGameStateChanged(): void {
-    // Check chapter banner
+    // 1. Sync newly built buildings & discovered relics immediately!
+    this.syncBuiltBuildings(true);
+    this.syncRelicVisuals();
+
+    // 2. Check chapter banner
     if (this.lastBannerChapter !== gameState.chapter) {
       this.lastBannerChapter = gameState.chapter;
       const curCh = MEDIEVAL_CHAPTERS.find((c) => c.id === gameState.chapter);
@@ -812,11 +1001,29 @@ export class WorldScene extends Phaser.Scene {
   }
 
   update(time: number, delta: number): void {
+    const win = window as any;
+
+    // Update resource node regrowth alpha
+    const now = Date.now();
+    for (const [, state] of this.resourceState) {
+      const ready = now >= state.readyAt;
+      state.sprite.setAlpha(ready ? 1.0 : 0.45);
+    }
+
+    // CRITICAL FIX: Block world movement & world [E] trigger while any modal/dialog is open!
+    if (win.__isModalOpen && win.__isModalOpen()) {
+      if (this.wasd?.E) Phaser.Input.Keyboard.JustDown(this.wasd.E);
+      if (this.spaceKey) Phaser.Input.Keyboard.JustDown(this.spaceKey);
+      if (this.enterKey) Phaser.Input.Keyboard.JustDown(this.enterKey);
+      this.player.stop();
+      if (this.labelDiv) this.labelDiv.style.display = 'none';
+      return;
+    }
+
     // 1. Movement Inputs (WASD, CursorKeys, TouchControls)
     let moveX = 0;
     let moveY = 0;
 
-    const win = window as any;
     const touch = win.__touchControls;
     if (touch && (touch.dx !== 0 || touch.dy !== 0)) {
       moveX = touch.dx;
@@ -832,15 +1039,22 @@ export class WorldScene extends Phaser.Scene {
 
     if (isMoving) {
       const len = Math.hypot(moveX, moveY);
-      const speed = 90; // px / sec
+      const speed = 94; // px / sec
       const vx = (moveX / len) * speed * (delta / 1000);
       const vy = (moveY / len) * speed * (delta / 1000);
 
       const nextX = Phaser.Math.Clamp(this.player.x + vx, 20, (this.mapW - 2) * 16);
       const nextY = Phaser.Math.Clamp(this.player.y + vy, 20, (this.mapH - 2) * 16);
 
-      this.player.x = nextX;
-      this.player.y = nextY;
+      // Smooth sliding collision against river water & solid buildings
+      if (this.isWalkable(nextX, nextY)) {
+        this.player.x = nextX;
+        this.player.y = nextY;
+      } else if (this.isWalkable(nextX, this.player.y)) {
+        this.player.x = nextX;
+      } else if (this.isWalkable(this.player.x, nextY)) {
+        this.player.y = nextY;
+      }
       this.player.setDepth(this.player.y);
 
       // Facing & Walk Animation
@@ -885,6 +1099,7 @@ export class WorldScene extends Phaser.Scene {
     gameState.playerX = this.player.x;
     gameState.playerY = this.player.y;
     gameState.playTimeSeconds += delta / 1000;
+    gameState.dayTime = (gameState.dayTime + delta / 480000) % 1;
 
     // 2. Subsystem Updates
     this.wildlifeManager.update(delta, this.player.x, this.player.y);
@@ -894,31 +1109,34 @@ export class WorldScene extends Phaser.Scene {
     // 3. Proximity Target & Quest Compass
     this.updateActiveTargetAndCompass();
 
-    // 4. Handle Interaction Trigger [E], [SPACE], [ENTER]
-    const ePressed =
-      Phaser.Input.Keyboard.JustDown(this.wasd?.E) ||
-      (this.spaceKey && Phaser.Input.Keyboard.JustDown(this.spaceKey)) ||
-      (this.enterKey && Phaser.Input.Keyboard.JustDown(this.enterKey)) ||
-      (touch && touch.actionPressed);
-    if (ePressed) {
-      if (touch) touch.actionPressed = false;
+    // 4. Handle Touch Action Button (Keyboard [E]/[Space]/[Enter] is handled cleanly by UIScene)
+    if (touch && touch.actionPressed) {
+      touch.actionPressed = false;
       this.triggerInteraction();
     }
   }
 
   private updateActiveTargetAndCompass(): void {
     let closestTarget: InteractiveTarget | null = null;
-    let minDist = 48; // Proximity threshold
+    let minDist = 52; // Proximity threshold
 
     for (const t of this.targets) {
       if (t.minChapter > gameState.chapter) continue;
+      // Skip already discovered relics on the map
+      if (t.kind === 'relic' && (t.discovered || (t.relic && gameState.discoveredRelics.has(t.relic.id)))) {
+        continue;
+      }
+      // Skip building plots that are already built
+      if (t.kind === 'building_plot' && t.buildingId && gameState.builtBuildings.has(t.buildingId)) {
+        continue;
+      }
 
       // Falko Coords dynamisch abfragen
       const tx = t.kind === 'companion' && this.companionManager.sprite ? this.companionManager.sprite.x : t.x;
       const ty = t.kind === 'companion' && this.companionManager.sprite ? this.companionManager.sprite.y : t.y;
 
       const d = Phaser.Math.Distance.Between(this.player.x, this.player.y, tx, ty);
-      const reach = t.kind === 'interactive_quest' ? 56 : 46;
+      const reach = t.kind === 'interactive_quest' || t.kind === 'relic' ? 56 : 48;
       if (d < reach && d < minDist) {
         minDist = d;
         closestTarget = t;
@@ -1011,10 +1229,18 @@ export class WorldScene extends Phaser.Scene {
         gameState.compassText = '🥖 Drücke C -> Handwerksmenü öffnen & Gegenstand herstellen!';
       } else if (!steps[3]?.done) {
         // Step 3: Building [B]
-        targetX = this.player.x;
-        targetY = this.player.y;
-        targetName = 'Baugelände';
-        gameState.compassText = '🏰 Drücke B -> Baumodus öffnen & Struktur errichten!';
+        const reqB = MEDIEVAL_BUILDINGS.find((b) => b.chapter <= curCh.id && !gameState.builtBuildings.has(b.id));
+        if (reqB) {
+          targetX = reqB.x;
+          targetY = reqB.y;
+          targetName = `Bauplatz: ${reqB.title}`;
+          actionTip = `🏰 Drücke B (oder E am Bauplatz) -> ${reqB.title} errichten!`;
+        } else {
+          targetX = this.player.x;
+          targetY = this.player.y;
+          targetName = 'Baugelände';
+          gameState.compassText = '🏰 Drücke B -> Baumodus öffnen & Struktur errichten!';
+        }
       } else {
         // ALL 4 STEPS DONE! Point to Mentor for Quiz!
         targetX = curCh.mentor.x;
@@ -1023,7 +1249,7 @@ export class WorldScene extends Phaser.Scene {
         actionTip = `✨ Alle Aufgaben erfüllt! Sprich mit ${curCh.mentor.name} [E] für das Quiz!`;
       }
 
-      if (steps[0]?.done && (!steps[2]?.done || !steps[3]?.done) && (targetX === this.player.x && targetY === this.player.y)) {
+      if (steps[0]?.done && !steps[2]?.done && targetX === this.player.x && targetY === this.player.y) {
         // Compass text already set above!
       } else {
         const dx = targetX - this.player.x;
@@ -1042,9 +1268,11 @@ export class WorldScene extends Phaser.Scene {
     // 1. Companion
     if (this.activeTarget.kind === 'companion') {
       this.companionManager.pet();
+      gameState.safety = Math.min(100, gameState.safety + 3);
       if (gameState.chapter === 1) {
         gameState.setObjectiveProgress(1, 1, true);
       }
+      gameState.notify();
       return;
     }
 
@@ -1064,7 +1292,9 @@ export class WorldScene extends Phaser.Scene {
     // 3. Relikt bergen
     if (this.activeTarget.kind === 'relic' && this.activeTarget.relic) {
       const rel = this.activeTarget.relic;
+      this.activeTarget.discovered = true;
       gameState.discoverRelic(rel.id);
+      this.syncRelicVisuals();
       sound.questStep();
       if (rel.id === 'relic_pflugmesser' && gameState.chapter === 2) {
         gameState.setObjectiveProgress(2, 1, true);
@@ -1074,6 +1304,8 @@ export class WorldScene extends Phaser.Scene {
         gameState.setObjectiveProgress(4, 1, true);
       } else if (rel.id === 'relic_ritterschild' && gameState.chapter === 6) {
         gameState.setObjectiveProgress(6, 1, true);
+      } else if (rel.id === 'relic_lehnsurkunde' && gameState.chapter === 4) {
+        gameState.setObjectiveProgress(4, 1, true);
       }
       const win = window as any;
       if (win.__openArtifactInspector) {
@@ -1082,24 +1314,73 @@ export class WorldScene extends Phaser.Scene {
       return;
     }
 
-    // 4. Rohstoff ernten & Dorfbrunnen
+    // 3b. Bauplatz direkt vor Ort errichten oder Baumenü öffnen
+    if (this.activeTarget.kind === 'building_plot' && this.activeTarget.buildingId) {
+      const bDef = MEDIEVAL_BUILDINGS.find((b) => b.id === this.activeTarget!.buildingId);
+      const win = window as any;
+      if (bDef && gameState.hasItems(bDef.cost)) {
+        if (gameState.build(bDef.id)) {
+          sound.questStep();
+          const curCh = MEDIEVAL_CHAPTERS.find((c) => c.id === gameState.chapter);
+          if (curCh && bDef.chapter <= curCh.id) {
+            gameState.setObjectiveProgress(curCh.id, 3, true);
+          }
+          if (win.__showToast) {
+            win.__showToast(`🏰 ${bDef.title} erfolgreich vor Ort errichtet!`);
+          }
+          return;
+        }
+      }
+      if (win.__toggleModal) win.__toggleModal('B');
+      return;
+    }
+
+    // 4. Rohstoff ernten (Holz schlagen, Steine abbauen, Eisenerz, Felder, Brunnen)
     if (this.activeTarget.kind === 'resource') {
       const itemId = this.activeTarget.itemId;
-      if (itemId) {
-        gameState.addInventory(itemId, 2);
-        sound.questStep();
-        const win = window as any;
-        if (win.__showToast) {
-          win.__showToast(`🌾 +2 ${MEDIEVAL_ITEMS[itemId]?.name || 'Rohstoff'} erhalten!`);
+      const nodeDef = this.activeTarget.nodeDef;
+      const win = window as any;
+
+      if (nodeDef) {
+        const st = this.resourceState.get(nodeDef.id);
+        const now = Date.now();
+        if (st && now < st.readyAt) {
+          const secs = Math.ceil((st.readyAt - now) / 1000);
+          if (win.__showToast) {
+            win.__showToast(`⏳ ${nodeDef.name} regeneriert noch (${secs}s)...`);
+          }
+          return;
         }
-      } else if (this.activeTarget.id === 'dorf_brunnen') {
-        gameState.addInventory('wasser_eimer', 1);
+        if (st) {
+          st.readyAt = now + Math.min(12000, nodeDef.respawnTime || 12000);
+          st.sprite.setAlpha(0.45);
+        }
+      }
+
+      if (itemId) {
+        const amount = nodeDef?.amount || 2;
+        gameState.addInventory(itemId, amount);
+        gameState.food = Math.max(10, gameState.food - 1);
+        gameState.notify();
         sound.questStep();
-        const win = window as any;
-        if (win.__showToast) win.__showToast('💧 Frisches Quellwasser aus dem Dorfbrunnen geschöpft (+1 Wassereimer)!');
+        const itemName = MEDIEVAL_ITEMS[itemId]?.name || 'Rohstoff';
+        let verb = 'Geerntet';
+        if (itemId === 'holz_balken') verb = '🪓 Holz geschlagen';
+        else if (itemId === 'feldstein') verb = '⛏️ Steine abgebaut';
+        else if (itemId === 'eisen_barren') verb = '⛏️ Eisenerz geschürft';
+        else if (itemId === 'wollballen') verb = '✂️ Wolle geschoren';
+
+        this.spawnFloatingText(this.activeTarget.x, this.activeTarget.y - 16, `+${amount} ${itemName}`, '#fde68a');
+        if (win.__showToast) {
+          win.__showToast(`${verb}: +${amount} ${itemName} erhalten!`);
+        }
+      } else if (this.activeTarget.id === 'dorf_brunnen' || this.activeTarget.id === 'burg_zisterne') {
+        gameState.addInventory('wasser_eimer', 2);
+        sound.questStep();
+        this.spawnFloatingText(this.activeTarget.x, this.activeTarget.y - 16, '+2 Brunnenwasser', '#93c5fd');
+        if (win.__showToast) win.__showToast('💧 Klares Quellwasser aus dem Brunnen geschöpft (+2 Wassereimer)!');
       } else {
         sound.click();
-        const win = window as any;
         if (win.__showToast) win.__showToast(`🔍 ${this.activeTarget.name} untersucht.`);
       }
       return;
@@ -1112,34 +1393,67 @@ export class WorldScene extends Phaser.Scene {
       return;
     }
 
-    if (this.activeTarget.id === 'inter_kloster_kraeuter' || this.activeTarget.id === 'kloster_kraeutergarten') {
+    if (this.activeTarget.id === 'dorf_bread_bakeoven') {
+      const win = window as any;
+      if (gameState.craft('brot_backen')) {
+        sound.questStep();
+        if (gameState.chapter === 1) gameState.setObjectiveProgress(1, 2, true);
+        this.spawnFloatingText(this.activeTarget.x, this.activeTarget.y - 16, '+2 Dorfbrot!', '#fde68a');
+        if (win.__showToast) win.__showToast('🥖 Du hast im Steinbackofen 2 knusprige Dorfrote gebacken!');
+      } else if (win.__toggleModal) {
+        win.__toggleModal('C');
+      }
+      return;
+    }
+
+    if (this.activeTarget.id === 'inter_kloster_kraeuter' || this.activeTarget.id === 'kloster_kraeutergarten' || this.activeTarget.id === 'kloster_herbal_planter') {
       if (gameState.chapter === 3) gameState.setObjectiveProgress(3, 1, true);
       const win = window as any;
       if (win.__openStation) win.__openStation('station_kraeuter');
       return;
     }
 
-    if (this.activeTarget.id === 'inter_burg_ruestung' || this.activeTarget.id === 'burg_ruestkammer') {
+    if (this.activeTarget.id === 'inter_burg_ruestung' || this.activeTarget.id === 'burg_ruestkammer' || this.activeTarget.id === 'burg_armor_suit') {
       if (gameState.chapter === 6) gameState.setObjectiveProgress(6, 1, true);
       const win = window as any;
       if (win.__openStation) win.__openStation('station_ruestkammer');
       return;
     }
 
-    if (this.activeTarget.id === 'dorf_wassermuehle') {
+    if (this.activeTarget.id === 'dorf_wassermuehle' || this.activeTarget.id === 'acker_windmill_tower') {
       sound.questStep();
-      gameState.addInventory('roggen_saat', 1);
+      gameState.addInventory('mehl_sack', 2);
       if (gameState.chapter === 5) gameState.setObjectiveProgress(5, 1, true);
+      this.spawnFloatingText(this.activeTarget.x, this.activeTarget.y - 16, '+2 Roggenmehl', '#fde68a');
       const win = window as any;
-      if (win.__showToast) win.__showToast('⚙️ Die Wassermühle mahlt den Roggen zu feinem Mehl (+1 Mehl/Saat)!');
+      if (win.__showToast) win.__showToast('⚙️ Die Mühle mahlt das Korn zu feinem Mehl (+2 Roggenmehl)!');
       return;
     }
 
-    if (this.activeTarget.id === 'dorf_gasthof') {
+    if (this.activeTarget.id === 'dorf_gasthof' || this.activeTarget.id === 'dorf_tavern_casks') {
       sound.door();
+      gameState.food = Math.min(100, gameState.food + 15);
+      gameState.notify();
+      this.spawnFloatingText(this.activeTarget.x, this.activeTarget.y - 16, '+15% Stärkung', '#86efac');
       const win = window as any;
-      if (win.__showToast) win.__showToast('🍻 Dorfkrug "Zum Goldenen Pflug": Hörige und Hufner wärmen sich am Kamin.');
+      if (win.__showToast) win.__showToast('🍻 Dorfkrug "Zum Goldenen Pflug": Du stärkst dich am Kamin (+15% Nahrung).');
       return;
+    }
+
+    if (this.activeTarget.id === 'kloster_scriptorium_desk') {
+      sound.questStep();
+      gameState.addInventory('pergament_bogen', 1);
+      gameState.knowledge = Math.min(100, gameState.knowledge + 5);
+      gameState.notify();
+      this.spawnFloatingText(this.activeTarget.x, this.activeTarget.y - 16, '+1 Pergament', '#fde68a');
+      const win = window as any;
+      if (win.__showToast) win.__showToast('📜 Im Skriptorium ein glattes Kalbspergament präpariert (+1 Pergament)!');
+      return;
+    }
+
+    const win = window as any;
+    if (win.__showToast) {
+      win.__showToast(`🔍 ${this.activeTarget.name}: Ein Zeugnis mittelalterlicher Alltagskultur.`);
     }
   }
 }

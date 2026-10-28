@@ -191,6 +191,95 @@
         color: #fde047;
       }
 
+      /* Bottom Inventory Hotbar (Steinzeit / Griechenland Standard) */
+      .hud-hotbar {
+        position: absolute;
+        bottom: 12px;
+        left: 50%;
+        transform: translateX(-50%);
+        pointer-events: auto;
+        z-index: 20;
+        max-width: 94vw;
+      }
+
+      .hotbar-items-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        background: rgba(20, 14, 9, 0.92);
+        border: 1.5px solid var(--gold-glow);
+        border-radius: 10px;
+        padding: 5px 10px;
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.7);
+        overflow-x: auto;
+      }
+
+      .hotbar-slot {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        background: rgba(45, 31, 20, 0.85);
+        border: 1px solid rgba(217, 119, 6, 0.5);
+        border-radius: 6px;
+        padding: 4px 8px;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        white-space: nowrap;
+      }
+
+      .hotbar-slot:hover {
+        border-color: var(--gold-bright);
+        background: rgba(68, 46, 28, 0.95);
+        transform: translateY(-1px);
+      }
+
+      .hotbar-icon {
+        width: 18px;
+        height: 18px;
+        object-fit: contain;
+        image-rendering: pixelated;
+      }
+
+      .hotbar-label {
+        font-size: 11px;
+        color: #fef3c7;
+        font-weight: 600;
+      }
+
+      .hotbar-qty {
+        font-size: 10px;
+        font-weight: 800;
+        color: var(--gold-bright);
+        background: rgba(0, 0, 0, 0.45);
+        padding: 1px 5px;
+        border-radius: 4px;
+      }
+
+      .hotbar-bag-btn {
+        background: #b45309;
+        border: 1px solid #f59e0b;
+        color: #fff;
+        font-size: 11px;
+        font-weight: 700;
+        padding: 5px 10px;
+        border-radius: 6px;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+
+      .hotbar-bag-btn:hover {
+        background: #92400e;
+      }
+
+      @media (max-width: 768px) {
+        .hud-status-bars {
+          display: none !important;
+        }
+        .hud-hotbar {
+          bottom: 84px;
+        }
+      }
+
       /* Modals Backdrop */
       .modal-backdrop {
         position: fixed;
