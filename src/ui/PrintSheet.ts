@@ -18,6 +18,8 @@ export class PrintSheet {
   }
 
   public print(): void {
+    gameState.storyFlags['opened_certificate'] = true;
+    gameState.notify();
     this.render();
     window.print();
   }

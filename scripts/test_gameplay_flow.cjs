@@ -187,6 +187,39 @@ async function run() {
     console.log('13. Game advanced to Chapter:', newChapter);
     if (newChapter !== 2) throw new Error(`Game did not advance to Chapter 2! Got: ${newChapter}`);
 
+    // Verify Chapter 2 Iron & Crafting Chain:
+    console.log('14. Testing Eisenerz -> Eisenbarren -> Pflugmesser production chain...');
+    const ironChainResult = await page.evaluate(() => {
+      const state = window.__gameState;
+      state.inventory.eisenerz = 2;
+      state.inventory.holz_balken = 3;
+      const smeltOk = state.craft('eisen_schmieden');
+      const hasIronBar = (state.inventory.eisen_barren || 0) >= 2;
+      const craftPlowOk = state.craft('pflugmesser_eisen');
+      return { smeltOk, hasIronBar, craftPlowOk, hasPlow: state.craftedOnce.has('pflugmesser_eisen') };
+    });
+    console.log('14b. Iron Chain Result:', ironChainResult);
+    if (!ironChainResult.smeltOk || !ironChainResult.hasIronBar || !ironChainResult.craftPlowOk || !ironChainResult.hasPlow) {
+      throw new Error('Iron crafting chain failed: ' + JSON.stringify(ironChainResult));
+    }
+
+    // Verify Dilemma 1 & 2 Execution
+    console.log('15. Testing Historical Dilemmas...');
+    const dilemmaResult = await page.evaluate(() => {
+      const state = window.__gameState;
+      // Trigger Dilemma 1
+      window.__openDilemma('dilemma_ch4_fehde');
+      const optBtn = document.querySelector('.dilemma-opt-btn');
+      if (optBtn) optBtn.click();
+      const confirmBtn = document.querySelector('#dilemma-confirm-btn');
+      if (confirmBtn) confirmBtn.click();
+
+      const d1Done = Boolean(state.storyFlags['dilemma_ch4_frieden_gestiftet'] || state.storyFlags['dilemma_ch4_harte_strenge']);
+      return { d1Done };
+    });
+    console.log('15b. Dilemma 1 Result:', dilemmaResult);
+    if (!dilemmaResult.d1Done) throw new Error('Dilemma 1 resolution failed!');
+
     console.log('🎉 FULL GAMEPLAY FLOW TEST PASSED PERFECTLY!');
   } finally {
     await browser.close();

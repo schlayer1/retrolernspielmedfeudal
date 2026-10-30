@@ -101,6 +101,7 @@ export class GameState {
       heuballen: 3,
       holz_balken: 3,
       feldstein: 2,
+      eisenerz: 2,
       wasser_eimer: 2,
     };
   }
@@ -134,7 +135,68 @@ export class GameState {
     };
   }
 
+  public syncChapterObjectives(): void {
+    for (let ch = 1; ch <= 8; ch++) {
+      if (!this.chapterObjectives[ch]) {
+        this.chapterObjectives[ch] = [false, false, false, false];
+      }
+    }
+
+    // Kapitel 1: Das Leben im Fronhof
+    if (this.storyFlags['falko_petted']) this.chapterObjectives[1][1] = true;
+    if (this.craftedOnce.has('brot_fladen')) this.chapterObjectives[1][2] = true;
+    if (this.builtBuildings.has('dorfgatter')) this.chapterObjectives[1][3] = true;
+
+    // Kapitel 2: Die Dreifelderwirtschaft
+    if (this.discoveredRelics.has('relic_pflugmesser')) this.chapterObjectives[2][1] = true;
+    if (this.craftedOnce.has('pflugmesser_eisen')) this.chapterObjectives[2][2] = true;
+    if (this.builtBuildings.has('pflugunterstand')) this.chapterObjectives[2][3] = true;
+
+    // Kapitel 3: Hinter Klostermauern (Ora et Labora)
+    if (this.storyFlags['station_kraeuter_done'] || this.craftedOnce.has('heilsalbe_kraeuter')) {
+      this.chapterObjectives[3][1] = true;
+    }
+    if (this.discoveredRelics.has('relic_codex')) this.chapterObjectives[3][2] = true;
+    if (this.builtBuildings.has('kraeuterbeet')) this.chapterObjectives[3][3] = true;
+
+    // Kapitel 4: Die Lehnspyramide
+    if (this.discoveredRelics.has('relic_lehnsurkunde')) this.chapterObjectives[4][1] = true;
+    if (this.storyFlags['dilemma_ch4_frieden_gestiftet'] || this.storyFlags['dilemma_ch4_harte_strenge']) {
+      this.chapterObjectives[4][2] = true;
+    }
+    if (this.discoveredRelics.has('relic_silberdenar')) this.chapterObjectives[4][3] = true;
+
+    // Kapitel 5: Die Höhenburg als Wehranlage
+    if (this.storyFlags['zisterne_drawn'] || (this.inventory.wasser_eimer || 0) >= 3) {
+      this.chapterObjectives[5][1] = true;
+    }
+    if (this.builtBuildings.has('hurde_burgtor')) this.chapterObjectives[5][2] = true;
+    if (this.builtBuildings.has('waffenstaender')) this.chapterObjectives[5][3] = true;
+
+    // Kapitel 6: Vom Pagen zum Ritter (Schwertleite)
+    if (this.storyFlags['station_ruestkammer_done'] || this.craftedOnce.has('wappenschild_rohling')) {
+      this.chapterObjectives[6][1] = true;
+    }
+    if (this.discoveredRelics.has('relic_ritterschild')) this.chapterObjectives[6][2] = true;
+    if (this.craftedOnce.has('ritter_hufeisen')) this.chapterObjectives[6][3] = true;
+
+    // Kapitel 7: Turnier, Minne & Höfische Kultur
+    if (this.builtBuildings.has('turnier_schranke')) this.chapterObjectives[7][1] = true;
+    if (this.builtBuildings.has('marktstand_tuch')) this.chapterObjectives[7][2] = true;
+    if (this.storyFlags['traded_wool_silver'] || (this.inventory.silber_pfennig || 0) >= 3) {
+      this.chapterObjectives[7][3] = true;
+    }
+
+    // Kapitel 8: Gerichtstag & Aufbruch in die Stadt
+    if (this.storyFlags['dilemma_ch8_loskauf_erfolgreich'] || this.storyFlags['dilemma_ch8_scholle_beharrt']) {
+      this.chapterObjectives[8][1] = true;
+    }
+    if (this.builtBuildings.has('gerichtseiche_bank')) this.chapterObjectives[8][2] = true;
+    if (this.storyFlags['opened_certificate']) this.chapterObjectives[8][3] = true;
+  }
+
   public notify(): void {
+    this.syncChapterObjectives();
     for (const fn of this.listeners) {
       fn();
     }
@@ -220,7 +282,7 @@ export class GameState {
   }
 
   public craft(recipeId: string): boolean {
-    const r = MEDIEVAL_RECIPES.find((x) => x.id === recipeId);
+    const r = MEDIEVAL_RECIPES.find((x) => x.id === recipeId || x.result === recipeId);
     if (!r) return false;
     if (!this.hasItems(r.cost)) return false;
     for (const [k, v] of Object.entries(r.cost)) {

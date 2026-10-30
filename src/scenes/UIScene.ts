@@ -105,7 +105,12 @@ export class UIScene extends Phaser.Scene {
       const msg = gameState.eat();
       this.showToast(msg);
     };
-    win.__printHefterSheet = () => this.printSheet.print();
+    win.__printHefterSheet = () => {
+      gameState.storyFlags['opened_certificate'] = true;
+      gameState.notify();
+      this.printSheet.print();
+    };
+    win.__openDilemma = (dilemmaId: string) => this.openDilemma(dilemmaId);
     win.__MEDIEVAL_CHAPTERS = MEDIEVAL_CHAPTERS;
     win.__MEDIEVAL_RELICS = MEDIEVAL_RELICS;
     win.__gameState = gameState;
@@ -261,12 +266,32 @@ export class UIScene extends Phaser.Scene {
   public closeModal(): void {
     this.activeModal = 'none';
     this.modalOverlay.style.display = 'none';
+    this.dilemmaModal.close();
     this.touchControls.setVisible(true);
 
     const world = this.scene.get('WorldScene') as WorldScene;
     if (world && world.resetDialogFocus) {
       world.resetDialogFocus();
     }
+  }
+
+  public openDilemma(dilemmaId: string): void {
+    const dilemma = MEDIEVAL_DILEMMAS.find((d) => d.id === dilemmaId);
+    if (!dilemma) return;
+    this.activeModal = 'dilemma';
+    this.touchControls.setVisible(false);
+    this.dilemmaModal.open(dilemma, (opt) => {
+      for (const [k, v] of Object.entries(opt.rewards)) {
+        gameState.addInventory(k as MedievalItemId, v);
+      }
+      gameState.storyFlags[opt.storyFlag] = true;
+      gameState.dilemmaSummary = `${dilemma.conflictTitle}: ${opt.title}`;
+      gameState.safety = Math.min(100, gameState.safety + 10);
+      gameState.knowledge = Math.min(100, gameState.knowledge + 8);
+      gameState.notify();
+      this.showToast(`⚖️ Schiedsspruch besiegelt: "${opt.title}"`);
+      this.closeModal();
+    });
   }
 
   // =========================================================================
@@ -339,6 +364,7 @@ export class UIScene extends Phaser.Scene {
         heuballen: 'Wiesenheu',
         holz_balken: 'Bauholz',
         feldstein: 'Bruchstein',
+        eisenerz: 'Eisenerz',
         eisen_barren: 'Eisen',
         wasser_eimer: 'Wasser',
         wollballen: 'Wolle',
@@ -422,10 +448,21 @@ export class UIScene extends Phaser.Scene {
                 : `💡 Untersuche den Fronhof und folge dem Kompass.`
             }
           </div>
-          <div class="qt-action-row" style="margin-top:8px;">
+          <div class="qt-action-row" style="margin-top:8px;display:flex;flex-direction:column;gap:5px;">
             <button class="qt-action-btn" onclick="window.__openMentorDialogForCurrent()" style="width:100%;padding:4px 8px;font-size:11px;font-weight:700;background:#d97706;border:1px solid #f59e0b;color:#1a1006;border-radius:4px;cursor:pointer;">
               💬 Mit ${curCh.mentor.name} sprechen [E]
             </button>
+            ${
+              curCh.id === 4 && !steps[2]?.done
+                ? `<button class="qt-action-btn" onclick="window.__openDilemma('dilemma_ch4_fehde')" style="width:100%;padding:4px 8px;font-size:11px;font-weight:700;background:#b45309;border:1px solid #f59e0b;color:#fff;border-radius:4px;cursor:pointer;">⚖️ Lehnsgericht-Dilemma schlichten</button>`
+                : curCh.id === 8 && !steps[1]?.done
+                ? `<button class="qt-action-btn" onclick="window.__openDilemma('dilemma_ch8_stadtflucht')" style="width:100%;padding:4px 8px;font-size:11px;font-weight:700;background:#b45309;border:1px solid #f59e0b;color:#fff;border-radius:4px;cursor:pointer;">⚖️ Stadtflucht-Dilemma schlichten</button>`
+                : curCh.id === 3 && !steps[1]?.done
+                ? `<button class="qt-action-btn" onclick="window.__openStation('station_kraeuter')" style="width:100%;padding:4px 8px;font-size:11px;font-weight:700;background:#15803d;border:1px solid #4ade80;color:#fff;border-radius:4px;cursor:pointer;">🌿 Kräutermörser-Station öffnen</button>`
+                : curCh.id === 6 && !steps[1]?.done
+                ? `<button class="qt-action-btn" onclick="window.__openStation('station_ruestkammer')" style="width:100%;padding:4px 8px;font-size:11px;font-weight:700;background:#1e40af;border:1px solid #60a5fa;color:#fff;border-radius:4px;cursor:pointer;">🛡️ Rüstkammer-Station öffnen</button>`
+                : ''
+            }
           </div>
         </div>
       `
@@ -954,6 +991,8 @@ export class UIScene extends Phaser.Scene {
       if (isComplete) {
         sound.success();
         gameState.addInventory(st.rewardItem, st.rewardQty);
+        gameState.storyFlags['station_kraeuter_done'] = true;
+        gameState.notify();
         this.showToast(`✅ Wundsalbe perfekt zubereitet! +${st.rewardQty} ${MEDIEVAL_ITEMS[st.rewardItem].name}`);
         this.closeModal();
       } else {
@@ -1014,6 +1053,8 @@ export class UIScene extends Phaser.Scene {
           if (this.stationArmoryStep > 4) {
             sound.success();
             gameState.addInventory(st.rewardItem, st.rewardQty);
+            gameState.storyFlags['station_ruestkammer_done'] = true;
+            gameState.notify();
             this.showToast(`✅ Ritterrüstung vollendet! +${st.rewardQty} ${MEDIEVAL_ITEMS[st.rewardItem].name}`);
             this.closeModal();
           } else {
@@ -1226,7 +1267,7 @@ export class UIScene extends Phaser.Scene {
         <div class="craft-list">
           ${MEDIEVAL_BUILDINGS.map((b) => {
             const isBuilt = gameState.builtBuildings.has(b.id);
-            const canBuild = !isBuilt && gameState.hasItems(b.cost) && b.chapter <= gameState.chapter;
+            const canBuild = !isBuilt && gameState.hasItems(b.cost);
             return `
               <div class="recipe-card ${isBuilt ? 'built' : canBuild ? '' : 'disabled'}">
                 <div class="recipe-info">
@@ -1254,7 +1295,6 @@ export class UIScene extends Phaser.Scene {
         const bDef = MEDIEVAL_BUILDINGS.find((b) => b.id === id);
         if (gameState.build(id)) {
           sound.success();
-          gameState.setObjectiveProgress(gameState.chapter, 3, true);
           this.showToast(`🏰 ${bDef?.title || 'Bauwerk'} in der Spielwelt errichtet!`);
           this.openBuildModal();
         } else {
@@ -1278,6 +1318,22 @@ export class UIScene extends Phaser.Scene {
       getQty: number;
       desc: string;
     }> = [
+      {
+        id: 't_wolle_silber',
+        giveItem: 'wollballen',
+        giveQty: 2,
+        getItem: 'silber_pfennig',
+        getQty: 3,
+        desc: 'Verkaufe geschorene Schafwolle an Tuchhändler für Kölner Silberpfennige.',
+      },
+      {
+        id: 't_stein_erz',
+        giveItem: 'feldstein',
+        giveQty: 2,
+        getItem: 'eisenerz',
+        getQty: 2,
+        desc: 'Tausche groben Bruchstein bei Bergleuten gegen rohes Eisenerz.',
+      },
       {
         id: 't_stein_holz',
         giveItem: 'feldstein',
@@ -1359,6 +1415,10 @@ export class UIScene extends Phaser.Scene {
         const t = trades.find((x) => x.id === id);
         if (t && gameState.removeInventory(t.giveItem, t.giveQty)) {
           gameState.addInventory(t.getItem, t.getQty);
+          if (t.id === 't_wolle_silber') {
+            gameState.storyFlags['traded_wool_silver'] = true;
+          }
+          gameState.notify();
           sound.questStep();
           this.showToast(`⚖️ Getauscht: +${t.getQty} ${MEDIEVAL_ITEMS[t.getItem]?.name}!`);
           this.openTradeModal();
@@ -1409,6 +1469,8 @@ export class UIScene extends Phaser.Scene {
 
   public openCertificateModal(): void {
     this.activeModal = 'certificate';
+    gameState.storyFlags['opened_certificate'] = true;
+    gameState.notify();
     this.touchControls.setVisible(false);
     this.modalOverlay.style.display = 'flex';
 

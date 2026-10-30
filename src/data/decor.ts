@@ -52,9 +52,9 @@ export const MEDIEVAL_DECOR: DecorObject[] = [
   // =========================================================================
   // Fronhof des Meiers (Salland-Zentrale)
   { id: 'fronhof_meierhaus', x: 18 * 16, y: 52 * 16, spriteKey: 'cottage_stone', scale: 0.85, originX: 0.5, originY: 0.9, kind: 'building' },
-  // Dorfschmiede mit Amboss
-  { id: 'dorf_schmiede', x: 32 * 16, y: 52 * 16, spriteKey: 'smithy', scale: 0.85, originX: 0.5, originY: 0.9, kind: 'building' },
-  { id: 'dorf_amboss', x: 36 * 16, y: 54 * 16, spriteKey: 'anvil', scale: 1.0, originX: 0.5, originY: 0.9, interactive: true, label: '[E] Dorfamboss (Werkstatt öffnen)', kind: 'resource' },
+  // Dorfschmiede mit Amboss & Rennofen
+  { id: 'dorf_schmiede', x: 32 * 16, y: 52 * 16, spriteKey: 'smithy', scale: 0.85, originX: 0.5, originY: 0.9, kind: 'building', interactive: true, label: '[E] Dorfschmiede & Rennofen (Eisen schmieden)' },
+  { id: 'dorf_amboss', x: 36 * 16, y: 54 * 16, spriteKey: 'anvil', scale: 1.0, originX: 0.5, originY: 0.9, interactive: true, label: '[E] Dorfamboss (Eisen schmieden / Werkstatt)', kind: 'resource' },
   // Dorfgasthof / Taverne & Schenke
   { id: 'dorf_gasthof', x: 22 * 16, y: 68 * 16, spriteKey: 'inn', scale: 0.8, originX: 0.5, originY: 0.9, kind: 'building', interactive: true, label: '[E] Dorfgasthof betreten' },
   { id: 'dorf_tavern_casks', x: 28 * 16, y: 70 * 16, spriteKey: 'tavern_beer_casks', scale: 1.0, originX: 0.5, originY: 0.9, kind: 'prop', interactive: true, label: '[E] Dünnbierfässer an der Schenke' },
@@ -112,9 +112,9 @@ export const RESOURCE_NODES: ResourceNode[] = [
   { id: 'node_stone_river', name: 'Uferfelsen am Mühlenbach', x: 46 * 16, y: 52 * 16, item: 'feldstein', amount: 2, respawnTime: 18000, spriteKey: 'rock_moss_d', scale: 1.0 },
   { id: 'node_stone_east', name: 'Findling an der Flurgrenze', x: 62 * 16, y: 36 * 16, item: 'feldstein', amount: 2, respawnTime: 18000, spriteKey: 'rock_big_b', scale: 1.0 },
 
-  // 3. Eisenerz schürfen (Eisen)
-  { id: 'node_iron_1', name: 'Raseneisenerz-Fels (Eisen abbauen)', x: 40 * 16, y: 52 * 16, item: 'eisen_barren', amount: 2, respawnTime: 22000, spriteKey: 'rock_big_c', scale: 0.75 },
-  { id: 'node_iron_2', name: 'Erzader am Burgfelsen', x: 8 * 16, y: 26 * 16, item: 'eisen_barren', amount: 2, respawnTime: 22000, spriteKey: 'rock_big_a', scale: 0.75 },
+  // 3. Eisenerz in der Mine & Erzgrube abbauen (Rohes Eisenerz -> in der Schmiede zu Geschmiedetem Eisen schmieden)
+  { id: 'node_iron_1', name: 'Raseneisenerz-Grube (Rohes Eisenerz abbauen)', x: 40 * 16, y: 52 * 16, item: 'eisenerz', amount: 2, respawnTime: 18000, spriteKey: 'rock_big_c', scale: 0.75 },
+  { id: 'node_iron_2', name: 'Eisenmine am Burgfelsen (Rohes Eisenerz abbauen)', x: 8 * 16, y: 26 * 16, item: 'eisenerz', amount: 2, respawnTime: 18000, spriteKey: 'rock_big_a', scale: 0.75 },
 
   // 4. Ackerernte, Heu, Obst & Schafwolle
   { id: 'node_crop_winter', name: 'Winterfrucht (Roggen ernten)', x: 72 * 16, y: 62 * 16, item: 'roggen_saat', amount: 3, respawnTime: 15000, spriteKey: 'crop_wheat_4', scale: 1.0 },

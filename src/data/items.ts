@@ -5,6 +5,7 @@ export type MedievalItemId =
   | 'heuballen'
   | 'holz_balken'
   | 'feldstein'
+  | 'eisenerz'
   | 'eisen_barren'
   | 'silber_pfennig'
   | 'pergament_bogen'
@@ -75,12 +76,20 @@ export const MEDIEVAL_ITEMS: Record<MedievalItemId, MedievalItem> = {
     description: 'Am Steinbruch und an den Burgfelsen gebrochener Kalk- und Feldstein für Grundmauern, Brunnen und Backöfen.',
     epochenwert: 3,
   },
+  eisenerz: {
+    id: 'eisenerz',
+    name: 'Rohes Eisenerz',
+    category: 'rohstoff',
+    icon: '/assets/icons/raseneisenerz.png',
+    description: 'Aus der Eisenmine am Burgberg und an Raseneisen-Gruben gebrochenes Roherz. Wird in der Dorfschmiede zu Geschmiedetem Eisen verhüttet.',
+    epochenwert: 3,
+  },
   eisen_barren: {
     id: 'eisen_barren',
     name: 'Geschmiedetes Eisen',
-    category: 'rohstoff',
+    category: 'handwerk',
     icon: '/assets/icons/eisenerz.png',
-    description: 'Aus Erz geschmolzener Eisenbarren zur Fertigung von Pflugscharen, Nägeln und Rüstungsteilen.',
+    description: 'In der Dorfschmiede (oder im Handwerksmenü C) aus Rohem Eisenerz und Bauholz ausgeschmiedeter Eisenbarren.',
     epochenwert: 4,
   },
   silber_pfennig: {
@@ -177,13 +186,40 @@ export interface MedievalRecipe {
 
 export const MEDIEVAL_RECIPES: MedievalRecipe[] = [
   {
+    id: 'mehl_mahlen',
+    name: 'Roggen zu Mehl mahlen',
+    result: 'mehl_sack',
+    resultAmount: 2,
+    cost: { roggen_saat: 1 },
+    description: 'Mahle geernteten Roggen (an der Wassermühle oder mit dem Handmahlstein) zu feinem Roggenmehl.',
+    minChapter: 1,
+  },
+  {
+    id: 'brot_backen',
+    name: 'Dorfbrot im Ofen backen',
+    result: 'brot_fladen',
+    resultAmount: 2,
+    cost: { mehl_sack: 1, wasser_eimer: 1 },
+    description: 'Knete Teig aus Roggenmehl und Brunnenwasser und backe knuspriges Brot für die Gesindetafel.',
+    minChapter: 1,
+  },
+  {
+    id: 'eisen_schmieden',
+    name: 'Geschmiedetes Eisen herstellen (Schmiede & Rennofen)',
+    result: 'eisen_barren',
+    resultAmount: 2,
+    cost: { eisenerz: 1, holz_balken: 1 },
+    description: 'Verhütte Rohes Eisenerz aus der Eisenmine mit Eichen-Bauholz in der Dorfschmiede zu schmiedbarem Eisen!',
+    minChapter: 1,
+  },
+  {
     id: 'pflugmesser_schmieden',
     name: 'Pflugmesser (Sech) schmieden',
     result: 'pflugmesser_eisen',
     resultAmount: 1,
     cost: { eisen_barren: 2, holz_balken: 1 },
-    description: 'Schmiede in der Dorfesse ein stabiles Messer für den schweren Wendepflug.',
-    minChapter: 2,
+    description: 'Schmiede in der Dorfesse ein stabiles Messer aus Geschmiedetem Eisen für den schweren Wendepflug.',
+    minChapter: 1,
   },
   {
     id: 'klostersalbe_ruehren',
@@ -192,7 +228,16 @@ export const MEDIEVAL_RECIPES: MedievalRecipe[] = [
     resultAmount: 2,
     cost: { lehnssiegel_wachs: 1, wasser_eimer: 1 },
     description: 'Zerreibe Heilkräuter im Steinmörser und vermenge sie mit warmem Bienenwachs.',
-    minChapter: 3,
+    minChapter: 1,
+  },
+  {
+    id: 'pergament_herstellen',
+    name: 'Kalbspergament schaben & glätten',
+    result: 'pergament_bogen',
+    resultAmount: 2,
+    cost: { wollballen: 1, wasser_eimer: 1 },
+    description: 'Weiche Tierhaut in Kalkwasser ein, schabe sie glatt und trockne sie auf dem Spannrahmen fürs Skriptorium.',
+    minChapter: 1,
   },
   {
     id: 'hufeisen_schmieden',
@@ -200,8 +245,8 @@ export const MEDIEVAL_RECIPES: MedievalRecipe[] = [
     result: 'ritter_hufeisen',
     resultAmount: 2,
     cost: { eisen_barren: 1 },
-    description: 'Schmiede passgenaue Hufeisen für das Streitross von Ritter Wolfram.',
-    minChapter: 4,
+    description: 'Schmiede aus Geschmiedetem Eisen passgenaue Hufeisen für das Streitross von Ritter Wolfram.',
+    minChapter: 1,
   },
   {
     id: 'wappenschild_fertigen',
@@ -210,15 +255,6 @@ export const MEDIEVAL_RECIPES: MedievalRecipe[] = [
     resultAmount: 1,
     cost: { holz_balken: 2, eisen_barren: 1 },
     description: 'Verleime Lindenholzbretter und ziehe Eisenbeschläge auf für den Schildknappen.',
-    minChapter: 6,
-  },
-  {
-    id: 'brot_backen',
-    name: 'Dorfbrot im Ofen backen',
-    result: 'brot_fladen',
-    resultAmount: 2,
-    cost: { mehl_sack: 1, wasser_eimer: 1 },
-    description: 'Knete Teig aus Roggenmehl und backe knuspriges Brot für die Gesindetafel.',
     minChapter: 1,
   },
 ];
@@ -254,11 +290,11 @@ export const MEDIEVAL_BUILDINGS: MedievalBuilding[] = [
     name: 'Unterstand für den Wendepflug',
     title: 'Pflugschuppen',
     chapter: 2,
-    cost: { holz_balken: 4, pflugmesser_eisen: 1 },
+    cost: { holz_balken: 3, pflugmesser_eisen: 1 },
     x: 42 * 16,
     y: 58 * 16,
-    spriteKey: 'stable',
-    scale: 0.65,
+    spriteKey: 'farm_plow_shelter',
+    scale: 1.25,
     description: 'Trockener Schuppen zum Schutz der kostbaren eisernen Pflugräder und Ketten.',
   },
   {
@@ -270,7 +306,7 @@ export const MEDIEVAL_BUILDINGS: MedievalBuilding[] = [
     x: 74 * 16,
     y: 28 * 16,
     spriteKey: 'flowerbed_gold',
-    scale: 1.0,
+    scale: 1.15,
     description: 'Reich bepflanztes Beet mit Salbei, Thymian und Ringelblumen hinter Klostermauern.',
   },
   {
@@ -282,7 +318,7 @@ export const MEDIEVAL_BUILDINGS: MedievalBuilding[] = [
     x: 24 * 16,
     y: 22 * 16,
     spriteKey: 'rack_shields',
-    scale: 1.0,
+    scale: 1.1,
     description: 'Geordnete Aufbewahrung von Übungsschwertern, Lanzen und Schilden im Schlosshof.',
   },
   {
@@ -290,19 +326,19 @@ export const MEDIEVAL_BUILDINGS: MedievalBuilding[] = [
     name: 'Wehrerker (Hurde) über der Zugbrücke',
     title: 'Wehrerker am Burgtor',
     chapter: 5,
-    cost: { holz_balken: 5, eisen_barren: 2 },
+    cost: { holz_balken: 3, feldstein: 2, eisen_barren: 1 },
     x: 26 * 16,
     y: 28 * 16,
     spriteKey: 'gatehouse',
     scale: 0.7,
-    description: 'Hölzerner Vorbau mit Guss- und Schießscharten zur Sicherung des Burgzugangs.',
+    description: 'Wehrhafter Vorbau aus Eichenbalken, Bruchstein und Eisenklammern zur Sicherung des Burgzugangs.',
   },
   {
     id: 'turnier_schranke',
     name: 'Turnierplatz-Schranke (Tilt)',
     title: 'Turnier-Laufbahn',
     chapter: 7,
-    cost: { holz_balken: 4, ritter_hufeisen: 2 },
+    cost: { holz_balken: 3, ritter_hufeisen: 1 },
     x: 48 * 16,
     y: 36 * 16,
     spriteKey: 'bench',
@@ -314,7 +350,7 @@ export const MEDIEVAL_BUILDINGS: MedievalBuilding[] = [
     name: 'Marktstand der Tuchhändler',
     title: 'Woll- und Tuchstand',
     chapter: 7,
-    cost: { holz_balken: 3, wollballen: 2 },
+    cost: { holz_balken: 2, wollballen: 2 },
     x: 34 * 16,
     y: 46 * 16,
     spriteKey: 'stall_blue',
@@ -326,11 +362,11 @@ export const MEDIEVAL_BUILDINGS: MedievalBuilding[] = [
     name: 'Schöffenbank am Lehnsgericht',
     title: 'Gerichtsbank des Meiers',
     chapter: 8,
-    cost: { holz_balken: 3 },
+    cost: { feldstein: 2, holz_balken: 2 },
     x: 36 * 16,
     y: 40 * 16,
     spriteKey: 'bench_stone',
-    scale: 1.0,
-    description: 'Steinbank unter der Dorflinde für Urteilssprüche und die Klärung von Hofrechten.',
+    scale: 1.15,
+    description: 'Steinerne Schöffenbank unter der Dorflinde für Urteilssprüche und die Klärung von Hofrechten.',
   },
 ];

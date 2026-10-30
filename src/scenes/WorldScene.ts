@@ -793,7 +793,8 @@ export class WorldScene extends Phaser.Scene {
       let actionLabel = '[E] Ernten & Sammeln';
       if (r.item === 'holz_balken') actionLabel = '[E] Holz schlagen (+Bauholz)';
       else if (r.item === 'feldstein') actionLabel = '[E] Steine abbauen (+Bruchstein)';
-      else if (r.item === 'eisen_barren') actionLabel = '[E] Eisenerz abbauen (+Eisen)';
+      else if (r.item === 'eisenerz') actionLabel = '[E] Eisenerz abbauen (+Rohes Eisenerz)';
+      else if (r.item === 'eisen_barren') actionLabel = '[E] Eisen abbauen (+Geschmiedetes Eisen)';
       else if (r.item === 'wollballen') actionLabel = '[E] Schafwolle scheren';
 
       this.targets.push({
@@ -857,6 +858,29 @@ export class WorldScene extends Phaser.Scene {
       y: 24 * 16,
       minChapter: 6,
       actionTip: '[E] Rüstkammer-Station öffnen',
+    });
+
+    // 4b. Historische Dilemmas (Schiedssprüche)
+    this.targets.push({
+      id: 'inter_dilemma_ch4',
+      kind: 'interactive_quest',
+      name: 'Lehnsgericht (Streitfall Fehde)',
+      sub: 'Historisches Dilemma Ch 4',
+      x: 24 * 16,
+      y: 30 * 16,
+      minChapter: 4,
+      actionTip: '[E] Streit im Lehnsgericht schlichten',
+    });
+
+    this.targets.push({
+      id: 'inter_dilemma_ch8',
+      kind: 'interactive_quest',
+      name: 'Gerichtslinde (Stadtflucht)',
+      sub: 'Historisches Dilemma Ch 8',
+      x: 34 * 16,
+      y: 42 * 16,
+      minChapter: 8,
+      actionTip: '[E] Stadtflucht-Streit an der Gerichtslinde schlichten',
     });
 
     // 5. Interaktive Dorf- & Hof-Objekte aus MEDIEVAL_DECOR
@@ -1185,10 +1209,10 @@ export class WorldScene extends Phaser.Scene {
         targetName = curCh.mentor.name;
         actionTip = `📍 Sprich mit ${curCh.mentor.name} [E]`;
       } else if (!steps[1]?.done) {
-        // Step 1: Action (Falko, Relic, Station, etc.)
-        if (curCh.id === 1 && this.companionManager.sprite) {
-          targetX = this.companionManager.sprite.x;
-          targetY = this.companionManager.sprite.y;
+        // Step 1: Specific Action
+        if (curCh.id === 1) {
+          targetX = this.companionManager.sprite ? this.companionManager.sprite.x : 20 * 16;
+          targetY = this.companionManager.sprite ? this.companionManager.sprite.y : 56 * 16;
           targetName = 'Hofhund Falko';
           actionTip = '❤️ Streichle Falko [E]!';
         } else if (curCh.id === 2) {
@@ -1202,44 +1226,137 @@ export class WorldScene extends Phaser.Scene {
           targetName = 'Kräutergarten (Kloster)';
           actionTip = '🌿 Untersuche die Kräuter [E]!';
         } else if (curCh.id === 4) {
-          targetX = 32 * 16;
-          targetY = 44 * 16;
-          targetName = 'Marktplatz (Silberdenar)';
-          actionTip = '🪙 Untersuche den Markt [E]!';
+          targetX = 20 * 16;
+          targetY = 16 * 16;
+          targetName = 'Lehnsurkunde (Palas)';
+          actionTip = '📜 Prüfe die Lehnsurkunde [E]!';
         } else if (curCh.id === 5) {
-          targetX = 44 * 16;
-          targetY = 64 * 16;
-          targetName = 'Wassermühle am Mühlenbach';
-          actionTip = '⚙️ Mahle Getreide an der Mühle [E]!';
+          targetX = 28 * 16;
+          targetY = 20 * 16;
+          targetName = 'Burgzisterne';
+          actionTip = '💧 Schöpfe Wasser an der Zisterne [E]!';
         } else if (curCh.id === 6) {
           targetX = 16 * 16;
           targetY = 24 * 16;
           targetName = 'Ritterliche Rüstkammer';
-          actionTip = '🛡️ Untersuche die Rüstkammer [E]!';
+          actionTip = '🛡️ Meistere die Rüstkammer-Station [E]!';
+        } else if (curCh.id === 7) {
+          targetX = 34 * 16;
+          targetY = 26 * 16;
+          targetName = 'Bauplatz Turnierschranke';
+          actionTip = '🏰 Errichte die Turnierschranke [B]!';
+        } else if (curCh.id === 8) {
+          targetX = 34 * 16;
+          targetY = 42 * 16;
+          targetName = 'Gerichtslinde (Dilemma 2)';
+          actionTip = '⚖️ Schlichte den Stadtflucht-Streit [E]!';
         } else {
           targetX = curCh.targetCoords.x;
           targetY = curCh.targetCoords.y;
           targetName = curCh.targetCoords.name;
         }
       } else if (!steps[2]?.done) {
-        // Step 2: Crafting [C]
-        targetX = this.player.x;
-        targetY = this.player.y;
-        targetName = 'Werkstatt';
-        gameState.compassText = '🥖 Drücke C -> Handwerksmenü öffnen & Gegenstand herstellen!';
-      } else if (!steps[3]?.done) {
-        // Step 3: Building [B]
-        const reqB = MEDIEVAL_BUILDINGS.find((b) => b.chapter <= curCh.id && !gameState.builtBuildings.has(b.id));
-        if (reqB) {
-          targetX = reqB.x;
-          targetY = reqB.y;
-          targetName = `Bauplatz: ${reqB.title}`;
-          actionTip = `🏰 Drücke B (oder E am Bauplatz) -> ${reqB.title} errichten!`;
+        // Step 2
+        if (curCh.id === 1) {
+          targetX = 26 * 16;
+          targetY = 52 * 16;
+          targetName = 'Dorfbackofen';
+          actionTip = '🥖 Backe Dorfbrot (Taste C oder E am Backofen)!';
+        } else if (curCh.id === 2) {
+          if ((gameState.inventory.eisen_barren || 0) < 1 && (gameState.inventory.eisenerz || 0) < 1) {
+            targetX = 40 * 16;
+            targetY = 52 * 16;
+            targetName = 'Raseneisenerz-Grube';
+            actionTip = '⛏️ Baue Rohes Eisenerz ab [E]!';
+          } else {
+            targetX = 36 * 16;
+            targetY = 54 * 16;
+            targetName = 'Dorfschmiede & Rennofen';
+            actionTip = '🔨 Schmiede Pflugmesser (Taste C oder E am Amboss)!';
+          }
+        } else if (curCh.id === 3) {
+          targetX = 84 * 16;
+          targetY = 22 * 16;
+          targetName = 'Klosterkodex (Skriptorium)';
+          actionTip = '📖 Birg den Klosterkodex [E]!';
+        } else if (curCh.id === 4) {
+          targetX = 24 * 16;
+          targetY = 30 * 16;
+          targetName = 'Lehnsgericht (Dilemma 1)';
+          actionTip = '⚖️ Schlichte den Fehde-Streit [E]!';
+        } else if (curCh.id === 5) {
+          targetX = 28 * 16;
+          targetY = 30 * 16;
+          targetName = 'Bauplatz Wehrerker (Hurde)';
+          actionTip = '🏰 Baue den Wehrerker am Burgtor [B]!';
+        } else if (curCh.id === 6) {
+          targetX = 14 * 16;
+          targetY = 26 * 16;
+          targetName = 'Wappenschild (Waffenlager)';
+          actionTip = '🛡️ Birg den Herolds-Wappenschild [E]!';
+        } else if (curCh.id === 7) {
+          targetX = 48 * 16;
+          targetY = 42 * 16;
+          targetName = 'Bauplatz Tuch-Marktstand';
+          actionTip = '🏰 Baue den Tuchstand vor dem Burgtor [B]!';
+        } else if (curCh.id === 8) {
+          targetX = 36 * 16;
+          targetY = 44 * 16;
+          targetName = 'Bauplatz Gerichtsbank';
+          actionTip = '🏰 Errichte die Gerichtsbank [B]!';
         } else {
+          targetX = curCh.targetCoords.x;
+          targetY = curCh.targetCoords.y;
+          targetName = 'Werkstatt';
+          actionTip = '🔨 Gegenstand herstellen (Taste C)!';
+        }
+      } else if (!steps[3]?.done) {
+        // Step 3
+        if (curCh.id === 1) {
+          targetX = 78 * 16;
+          targetY = 68 * 16;
+          targetName = 'Bauplatz Viehgatter';
+          actionTip = '🏰 Errichte das Viehgatter am Fronhof [B]!';
+        } else if (curCh.id === 2) {
+          targetX = 68 * 16;
+          targetY = 58 * 16;
+          targetName = 'Bauplatz Pflugunterstand';
+          actionTip = '🏰 Baue den Pflugunterstand am Feldrand [B]!';
+        } else if (curCh.id === 3) {
+          targetX = 70 * 16;
+          targetY = 24 * 16;
+          targetName = 'Bauplatz Kloster-Heilbeet';
+          actionTip = '🌿 Pflanze das Kloster-Heilbeet [B]!';
+        } else if (curCh.id === 4) {
+          targetX = 50 * 16;
+          targetY = 44 * 16;
+          targetName = 'Silberpfennig (Marktplatz)';
+          actionTip = '🪙 Birg den Silberpfennig [E]!';
+        } else if (curCh.id === 5) {
+          targetX = 14 * 16;
+          targetY = 22 * 16;
+          targetName = 'Bauplatz Waffenständer';
+          actionTip = '🏰 Platziere den Waffenständer im Burghof [B]!';
+        } else if (curCh.id === 6) {
+          targetX = 36 * 16;
+          targetY = 54 * 16;
+          targetName = 'Dorfschmiede (Hufeisen)';
+          actionTip = '🔨 Schmiede Hufeisen (Taste C oder E am Amboss)!';
+        } else if (curCh.id === 7) {
+          targetX = 46 * 16;
+          targetY = 44 * 16;
+          targetName = 'Marktplatz (Kaufleute)';
+          actionTip = '⚖️ Tausche Wolle gegen Silber (Taste H oder E am Marktstand)!';
+        } else if (curCh.id === 8) {
           targetX = this.player.x;
           targetY = this.player.y;
-          targetName = 'Baugelände';
-          gameState.compassText = '🏰 Drücke B -> Baumodus öffnen & Struktur errichten!';
+          targetName = 'Urkunde & Diplom';
+          actionTip = '📜 Öffne die Urkunde (Taste U) und drucke dein Diplom (Taste P)!';
+        } else {
+          targetX = curCh.targetCoords.x;
+          targetY = curCh.targetCoords.y;
+          targetName = 'Infrastruktur';
+          actionTip = '🏰 Errichte das Bauwerk (Taste B)!';
         }
       } else {
         // ALL 4 STEPS DONE! Point to Mentor for Quiz!
@@ -1269,6 +1386,7 @@ export class WorldScene extends Phaser.Scene {
     if (this.activeTarget.kind === 'companion') {
       this.companionManager.pet();
       gameState.safety = Math.min(100, gameState.safety + 3);
+      gameState.storyFlags['falko_petted'] = true;
       if (gameState.chapter === 1) {
         gameState.setObjectiveProgress(1, 1, true);
       }
@@ -1367,6 +1485,7 @@ export class WorldScene extends Phaser.Scene {
         let verb = 'Geerntet';
         if (itemId === 'holz_balken') verb = '🪓 Holz geschlagen';
         else if (itemId === 'feldstein') verb = '⛏️ Steine abgebaut';
+        else if (itemId === 'eisenerz') verb = '⛏️ Rohes Eisenerz abgebaut';
         else if (itemId === 'eisen_barren') verb = '⛏️ Eisenerz geschürft';
         else if (itemId === 'wollballen') verb = '✂️ Wolle geschoren';
 
@@ -1376,6 +1495,8 @@ export class WorldScene extends Phaser.Scene {
         }
       } else if (this.activeTarget.id === 'dorf_brunnen' || this.activeTarget.id === 'burg_zisterne') {
         gameState.addInventory('wasser_eimer', 2);
+        gameState.storyFlags['zisterne_drawn'] = true;
+        gameState.notify();
         sound.questStep();
         this.spawnFloatingText(this.activeTarget.x, this.activeTarget.y - 16, '+2 Brunnenwasser', '#93c5fd');
         if (win.__showToast) win.__showToast('💧 Klares Quellwasser aus dem Brunnen geschöpft (+2 Wassereimer)!');
@@ -1387,9 +1508,30 @@ export class WorldScene extends Phaser.Scene {
     }
 
     // 5. Interaktive Stationen & Gebäude
-    if (this.activeTarget.id === 'inter_schmiede_amboss' || this.activeTarget.id === 'dorf_amboss') {
+    if (this.activeTarget.id === 'inter_schmiede_amboss' || this.activeTarget.id === 'dorf_amboss' || this.activeTarget.id === 'dorf_schmiede') {
       const win = window as any;
+      if ((gameState.inventory.eisenerz || 0) >= 1 && (gameState.inventory.holz_balken || 0) >= 1) {
+        if (gameState.craft('eisen_schmieden')) {
+          sound.questStep();
+          this.spawnFloatingText(this.activeTarget.x, this.activeTarget.y - 16, '+2 Geschmiedetes Eisen!', '#fde68a');
+          if (win.__showToast) win.__showToast('🔥 Im Rennofen aus Rohem Eisenerz +2 Geschmiedetes Eisen geschmiedet!');
+          return;
+        }
+      }
       if (win.__toggleModal) win.__toggleModal('C');
+      return;
+    }
+
+    // 5b. Historische Dilemmas
+    if (this.activeTarget.id === 'inter_dilemma_ch4') {
+      const win = window as any;
+      if (win.__openDilemma) win.__openDilemma('dilemma_ch4_fehde');
+      return;
+    }
+
+    if (this.activeTarget.id === 'inter_dilemma_ch8') {
+      const win = window as any;
+      if (win.__openDilemma) win.__openDilemma('dilemma_ch8_stadtflucht');
       return;
     }
 
