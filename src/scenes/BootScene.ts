@@ -11,6 +11,7 @@ export class BootScene extends Phaser.Scene {
     this.load.image('ground_a2', '/assets/world/ground_a2.png');
     this.load.image('ground_med_a2', '/assets/world/ground_med_a2.png');
     this.load.image('cliffs_nature', '/assets/world/cliffs_nature.png');
+    this.load.image('cliffs_desert', '/assets/world/cliffs_desert.png');
     this.load.image('Overworld', '/assets/gfx/Overworld.png');
 
     // 2. Main 16x32 Character Spritesheet

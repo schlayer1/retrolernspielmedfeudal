@@ -188,4 +188,46 @@ if (qualityErrors.length > 0) {
   process.exit(1);
 } else {
   console.log('✅ Comprehensive Quality Standards Verified (A2 Terrain, Flora, Atlas Decor, 5 Stations, 5 Relics, 20+ Terms, Audio & A4 Print Sheet).');
+
+  // QUALITY GATES A-H
+  console.log('\n--- VERIFYING QUALITY GATES A-H ---');
+  const gateErrors = [];
+  function checkGate(name, condition, errorMsg) {
+    if (!condition) {
+      gateErrors.push(`❌ GATE FAILED: ${name} -> ${errorMsg}`);
+    } else {
+      console.log(`  ✅ ${name}: PASSED`);
+    }
+  }
+
+  const mainCode = fs.readFileSync(path.join(ROOT, 'src/main.ts'), 'utf8');
+  checkGate('Gate A (Native 480x270)', mainCode.includes('GAME_W = 480') && mainCode.includes('GAME_H = 270') && mainCode.includes('Phaser.Scale.FIT'), 'main.ts must use 480x270 Phaser.Scale.FIT');
+
+  const lexCode = fs.readFileSync(path.join(ROOT, 'src/data/lexicon.ts'), 'utf8');
+  const lexMatches = lexCode.match(/id:\s*'[^']+'/g) || [];
+  checkGate('Gate B (27 Lexicon Entries)', lexMatches.length === 27, `Expected 27 lexicon entries, found ${lexMatches.length}`);
+
+  const chCode = fs.readFileSync(path.join(ROOT, 'src/data/chapters.ts'), 'utf8');
+  checkGate('Gate C (Chapters + Music + Interior)', (chCode.match(/mentor:\s*\{/g) || []).length >= 8 && chCode.includes('targetInterior:') && chCode.includes('trackId:'), 'chapters.ts must have chapters with targetInterior and music');
+
+  const stCode = fs.readFileSync(path.join(ROOT, 'src/data/stations.ts'), 'utf8');
+  checkGate('Gate D (5 Interactive Stations)', (stCode.match(/id:\s*'station_/g) || []).length === 5, 'stations.ts must define 5 stations');
+
+  const relCode = fs.readFileSync(path.join(ROOT, 'src/data/relics.ts'), 'utf8');
+  checkGate('Gate E (5 Medieval Relics)', (relCode.match(/id:\s*'relic_/g) || []).length === 5 && (relCode.includes('MEDIEVAL_RELICS') || relCode.includes('export const RELICS')), 'relics.ts must define 5 relics');
+
+  const intCode = fs.readFileSync(path.join(ROOT, 'src/scenes/InteriorScene.ts'), 'utf8');
+  checkGate('Gate F (Walkable InteriorScene without fillCircle)', intCode.includes('burgsaal_palas') && intCode.includes('klosterapotheke_skriptorium') && intCode.includes('dorfschmiede_hufeisen') && intCode.includes('zunftstube_rathaus') && !intCode.includes('fillCircle') && intCode.includes('exitToOverworld'), 'InteriorScene.ts must have 4 rooms, exitToOverworld, and 0 fillCircle calls');
+
+  const src = fs.readFileSync(path.join(ROOT, 'src/scenes/WorldScene.ts'), 'utf8');
+  checkGate('Gate G (Seamless Terrain + Cliffs + Flora + 1.0/1.32 Zoom)', src.includes('buildPlateauCliffs') && src.includes('scatterGroundFlora') && (src.includes('zoomTo(1.32') || src.includes('zoom: 1.32')), 'WorldScene.ts must use seamless baked terrain, cliffs, flora, and 1.0/1.32 zoom');
+
+  const uiCode = fs.readFileSync(path.join(ROOT, 'src/scenes/UIScene.ts'), 'utf8');
+  checkGate('Gate H (Steinzeit Top-HUD & 10 Key Badges)', uiCode.includes('hud-quest-box') && uiCode.includes('hud-bars-card') && uiCode.includes('hud-btn-row') && uiCode.includes('hud-hotbar') && (uiCode.match(/class="key-badge"/g) || []).length >= 10, 'UIScene.ts must render Steinzeit Top-HUD, 10 key-badge buttons, and bottom hotbar');
+
+  if (gateErrors.length > 0) {
+    console.error(gateErrors.join('\n'));
+    process.exit(1);
+  }
+  console.log('🏆 ALL SPATIAL & QUALITY GATES PASSED!');
 }

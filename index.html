@@ -1513,6 +1513,272 @@
       .flex-1 {
         flex: 1;
       }
+
+      /* =====================================================
+         STEINZEIT GOLD STANDARD TOP HUD & BOTTOM HOTBAR
+         ===================================================== */
+      .hud-top {
+        position: fixed;
+        top: 8px;
+        left: 10px;
+        right: 10px;
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 10px;
+        pointer-events: none;
+        z-index: 25;
+      }
+
+      .hud-top-bar {
+        position: fixed;
+        top: 8px;
+        left: 10px;
+        right: 10px;
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 10px;
+        pointer-events: none;
+        z-index: 25;
+      }
+
+      .hud-card {
+        background: rgba(26, 18, 12, 0.94);
+        border: 2px solid #b45309;
+        border-radius: 10px;
+        padding: 8px 12px;
+        color: #fef3c7;
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.65);
+        pointer-events: auto;
+      }
+
+      #hud-quest-box {
+        max-width: 380px;
+        min-width: 250px;
+      }
+
+      #hud-chapter-title {
+        font-family: 'Cinzel', Georgia, serif;
+        font-weight: 800;
+        color: #fbbf24;
+        font-size: 13px;
+        margin-bottom: 3px;
+        letter-spacing: 0.3px;
+      }
+
+      #hud-quest {
+        font-size: 11.5px;
+        color: #fef3c7;
+        line-height: 1.35;
+      }
+
+      .hud-compass-line {
+        margin-top: 5px;
+        padding-top: 4px;
+        border-top: 1px dashed rgba(217, 119, 6, 0.4);
+        font-size: 11px;
+        font-weight: 700;
+        color: #fde047;
+      }
+
+      .hud-right {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        align-items: flex-end;
+        pointer-events: none;
+      }
+
+      #hud-bars-card {
+        min-width: 245px;
+      }
+
+      .bar-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 11px;
+        margin: 2px 0;
+      }
+
+      .bar-row > span:first-child {
+        min-width: 98px;
+        font-weight: 600;
+      }
+
+      .bar-track {
+        width: 95px;
+        height: 9px;
+        background: #2a1d12;
+        border: 1px solid #78350f;
+        border-radius: 5px;
+        overflow: hidden;
+      }
+
+      .bar-fill {
+        height: 100%;
+        transition: width 0.25s ease;
+      }
+
+      .bar-fill.orange {
+        background: linear-gradient(90deg, #ea580c, #fb923c);
+      }
+
+      .bar-fill.blue {
+        background: linear-gradient(90deg, #16a34a, #4ade80);
+      }
+
+      .bar-fill.yellow {
+        background: linear-gradient(90deg, #2563eb, #60a5fa);
+      }
+
+      .hud-subinfo {
+        font-size: 10.5px;
+        color: #fde68a;
+        margin-top: 4px;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        flex-wrap: wrap;
+      }
+
+      .hud-btn-row {
+        display: flex;
+        gap: 5px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        max-width: 520px;
+        pointer-events: auto;
+      }
+
+      .hud-btn {
+        background: linear-gradient(180deg, #3d2314 0%, #1a0f08 100%);
+        color: #fde68a;
+        border: 1.5px solid #b45309;
+        border-radius: 7px;
+        padding: 4px 8px;
+        font-size: 11.5px;
+        font-weight: 700;
+        cursor: pointer;
+        pointer-events: auto;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+        white-space: nowrap;
+      }
+
+      .hud-btn:hover,
+      .hud-btn.active {
+        background: linear-gradient(180deg, #b45309 0%, #78350f 100%);
+        border-color: #fbbf24;
+        color: #fff;
+      }
+
+      .key-badge {
+        display: inline-block;
+        background: #fbbf24;
+        color: #1a0f08;
+        font-weight: 900;
+        font-size: 10px;
+        padding: 1px 4px;
+        border-radius: 3px;
+        line-height: 1.1;
+      }
+
+      .hud-bottom {
+        position: fixed;
+        bottom: 8px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 5px;
+        pointer-events: none;
+        z-index: 24;
+      }
+
+      .quest-tracker-box {
+        position: fixed;
+        bottom: 8px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 5px;
+        pointer-events: none;
+        z-index: 24;
+      }
+
+      #hud-hint {
+        background: rgba(15, 10, 6, 0.88);
+        border: 1.5px solid #b45309;
+        color: #fde68a;
+        padding: 3px 11px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 600;
+        box-shadow: 0 3px 10px rgba(0, 0, 0, 0.55);
+        white-space: nowrap;
+      }
+
+      .hud-bottom-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        pointer-events: auto;
+      }
+
+      #hud-hotbar {
+        display: flex;
+        gap: 4px;
+        background: rgba(26, 18, 12, 0.94);
+        border: 2px solid #b45309;
+        border-radius: 9px;
+        padding: 4px 6px;
+        pointer-events: auto;
+      }
+
+      .hotbar-slot {
+        width: 34px;
+        height: 34px;
+        background: rgba(42, 29, 18, 0.9);
+        border: 1.5px solid #78350f;
+        border-radius: 6px;
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+      }
+
+      .hotbar-slot.has-item {
+        border-color: #fbbf24;
+      }
+
+      .hotbar-slot.relic-slot {
+        background: rgba(50, 30, 15, 0.95);
+      }
+
+      .hotbar-slot img {
+        width: 22px;
+        height: 22px;
+        object-fit: contain;
+        image-rendering: pixelated;
+      }
+
+      .hotbar-slot .count {
+        position: absolute;
+        bottom: 1px;
+        right: 3px;
+        font-size: 9px;
+        font-weight: 800;
+        color: #fde68a;
+        text-shadow: 1px 1px 2px #000;
+      }
     </style>
   </head>
   <body>

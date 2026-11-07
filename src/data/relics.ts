@@ -91,3 +91,5 @@ export const MEDIEVAL_RELICS: MedievalRelic[] = [
     y: 26 * 16,
   },
 ];
+
+export const RELICS = MEDIEVAL_RELICS;

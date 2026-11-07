@@ -1,0 +1,63 @@
+{
+  "epoch": "medieval_feudal",
+  "title": "Das Europäische Mittelalter: Grundherrschaft, Lehnswesen & Rittertum",
+  "standard": "SNES 16-Bit SPC700 Aesthetic (Lute, Shawm, Gregorian Chant, Brass, Wooden Flutes, Bagpipes)",
+  "tracks": [
+    {
+      "chapter": 1,
+      "trackId": "med_k01_fronhof",
+      "title": "Fronhof & Scholle",
+      "style": "16-bit medieval lute, shawm & tambour",
+      "prompt": "Authentic 16-bit SNES medieval village theme with acoustic lute, wooden flute, recorder and rustic percussion."
+    },
+    {
+      "chapter": 2,
+      "trackId": "med_k02_dreifelder",
+      "title": "Ackerflur & Wendepflug",
+      "style": "Pastoral medieval folk with recorder and hurdy-gurdy",
+      "prompt": "Charming pastoral 16-bit folk melody with hurdy-gurdy, acoustic guitar and cheerful wooden flutes."
+    },
+    {
+      "chapter": 3,
+      "trackId": "med_k03_kloster",
+      "title": "Ora et Labora – Klostergesang",
+      "style": "Gregorian chant inspired 16-bit organum with pipe organ and monastic chime",
+      "prompt": "Sacred medieval monastic chant in 16-bit style with soft pipe organ, ethereal choir hums and bell chimes."
+    },
+    {
+      "chapter": 4,
+      "trackId": "med_k04_lehnswesen",
+      "title": "Der Treueschwur des Lehnsherrn",
+      "style": "Majestic feudal court fanfare with brass, regal timpani and harp",
+      "prompt": "Regal medieval court fanfare with brass horns, majestic timpani rolls and harp arpeggios."
+    },
+    {
+      "chapter": 5,
+      "trackId": "med_k05_hohenburg",
+      "title": "Burg Steinfels Wehranlagen",
+      "style": "Stately castle march with heavy drums, trumpets and strings",
+      "prompt": "Stately castle theme with marching snare, triumphant trumpet calls and rich strings."
+    },
+    {
+      "chapter": 6,
+      "trackId": "med_k06_rittertum",
+      "title": "Ritterschlag & Wappenehre",
+      "style": "Noble chivalric theme with acoustic guitar, brass swells and glockenspiel",
+      "prompt": "Noble knightly chivalric theme with lute picking, brass swells and resonant glockenspiel."
+    },
+    {
+      "chapter": 7,
+      "trackId": "med_k07_markt_turnier",
+      "title": "Turnierplatz & Stadtmarkt",
+      "style": "Festive Renaissance/medieval fair with shawms, bagpipe and tambourine",
+      "prompt": "Lively bustling medieval town festival with bagpipes, shawms, clapping tambourines and festive recorders."
+    },
+    {
+      "chapter": 8,
+      "trackId": "med_k08_staendeordnung",
+      "title": "Spiegel des Mittelalters",
+      "style": "Solemn reflective medieval epilogue with cello, lute and gentle chimes",
+      "prompt": "Reflective solemn medieval conclusion with cello melodies, acoustic lute and gentle chimes."
+    }
+  ]
+}

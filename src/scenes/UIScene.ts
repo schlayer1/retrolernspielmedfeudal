@@ -4,13 +4,16 @@ import { MEDIEVAL_CHAPTERS, ChapterData } from '../data/chapters';
 import { MEDIEVAL_BUILDINGS, MEDIEVAL_ITEMS, MEDIEVAL_RECIPES, MedievalItemId } from '../data/items';
 import { MEDIEVAL_LEXICON, LexiconEntry } from '../data/lexicon';
 import { MEDIEVAL_RELICS, MedievalRelic } from '../data/relics';
-import { MEDIEVAL_STATIONS, StationDef } from '../data/stations';
+import { MEDIEVAL_STATIONS, InteractiveStation, STATIONS } from '../data/stations';
 import { MEDIEVAL_DILEMMAS } from '../data/dilemmas';
 import { gameState, MEDIEVAL_ROLES } from '../systems/GameState';
 import { PlayerGender, PlayerRole } from '../systems/SaveManager';
 import { TouchControls } from '../ui/TouchControls';
 import { PrintSheet } from '../ui/PrintSheet';
 import { DilemmaModal } from '../ui/DilemmaModal';
+import { StationModal } from '../ui/StationModal';
+import { ArtifactInspectorModal } from '../ui/ArtifactInspectorModal';
+import { TimelineModal } from '../ui/TimelineModal';
 import { WorldScene } from './WorldScene';
 
 export type ModalType =
@@ -41,13 +44,11 @@ export class UIScene extends Phaser.Scene {
   private toastContainer!: HTMLDivElement;
   private dilemmaModal = new DilemmaModal();
   private printSheet = new PrintSheet();
+  private stationModal = new StationModal();
+  private artifactInspector = new ArtifactInspectorModal();
+  private timelineModal = new TimelineModal();
   private lastActionKeyMs = 0;
 
-  private activeRelic: MedievalRelic | null = null;
-  private isRelicFlipped = false;
-  private activeStation: StationDef | null = null;
-  private selectedStationItems: string[] = [];
-  private stationArmoryStep = 1;
 
   private selectedLexiconId: string = MEDIEVAL_LEXICON[0].id;
   private lexiconFilterTag: string = 'Alle';
@@ -96,11 +97,17 @@ export class UIScene extends Phaser.Scene {
       if (cur) this.openMentorDialog(cur);
     };
     win.__advanceDialog = () => this.advanceDialog();
-    win.__openArtifactInspector = (rel: MedievalRelic) => this.openArtifactInspector(rel);
+    win.__openArtifactInspector = (rel: any) => this.openArtifactInspector(rel);
     win.__openStation = (stationId: string) => this.openStation(stationId);
     win.__showToast = (msg: string) => this.showToast(msg);
     win.__toggleModal = (mod: string) => this.handleShortcutKey(mod.toUpperCase());
     win.__closeModal = () => this.closeModal();
+    win.__openTimeline = () => this.openTimelineModal();
+    win.__triggerPrintSheet = () => {
+      gameState.storyFlags['opened_certificate'] = true;
+      gameState.notify();
+      this.printSheet.print();
+    };
     win.__eatFood = () => {
       const msg = gameState.eat();
       this.showToast(msg);
@@ -114,6 +121,7 @@ export class UIScene extends Phaser.Scene {
     win.__MEDIEVAL_CHAPTERS = MEDIEVAL_CHAPTERS;
     win.__MEDIEVAL_RELICS = MEDIEVAL_RELICS;
     win.__gameState = gameState;
+    win.__MED_UI__ = this;
   }
 
   private initDOMStructure(): void {
@@ -127,11 +135,11 @@ export class UIScene extends Phaser.Scene {
     this.uiRoot.innerHTML = '';
 
     this.hudHeader = document.createElement('div');
-    this.hudHeader.className = 'hud-top-bar';
+    this.hudHeader.className = 'hud-top';
 
     this.questBox = document.createElement('div');
     this.questBox.id = 'quest-tracker';
-    this.questBox.className = 'quest-tracker-box';
+    this.questBox.className = 'hud-bottom';
 
     this.hotbarEl = document.createElement('div');
     this.hotbarEl.id = 'hud-hotbar';
@@ -148,7 +156,6 @@ export class UIScene extends Phaser.Scene {
 
     this.uiRoot.appendChild(this.hudHeader);
     this.uiRoot.appendChild(this.questBox);
-    this.uiRoot.appendChild(this.hotbarEl);
     this.uiRoot.appendChild(this.modalOverlay);
     this.uiRoot.appendChild(this.toastContainer);
   }
@@ -198,7 +205,7 @@ export class UIScene extends Phaser.Scene {
         }
       }
 
-      if (['I', 'C', 'B', 'H', 'F', 'L', 'Z', 'U', 'P', 'M'].includes(key)) {
+      if (['I', 'C', 'B', 'H', 'F', 'L', 'Z', 'U', 'P', 'M', 'K'].includes(key)) {
         this.handleShortcutKey(key);
       }
     });
@@ -219,6 +226,7 @@ export class UIScene extends Phaser.Scene {
     if (key === 'F') {
       const msg = gameState.eat();
       this.showToast(msg);
+      this.renderHUD();
       return;
     }
     if (key === 'P') {
@@ -261,12 +269,20 @@ export class UIScene extends Phaser.Scene {
       else this.openCertificateModal();
       return;
     }
+    if (key === 'K') {
+      if (this.activeModal === 'start') this.closeModal();
+      else this.openStartScreen();
+      return;
+    }
   }
 
   public closeModal(): void {
     this.activeModal = 'none';
     this.modalOverlay.style.display = 'none';
     this.dilemmaModal.close();
+    this.stationModal.close();
+    this.artifactInspector.close();
+    this.timelineModal.close();
     this.touchControls.setVisible(true);
 
     const world = this.scene.get('WorldScene') as WorldScene;
@@ -298,181 +314,204 @@ export class UIScene extends Phaser.Scene {
   // HUD (STEINZEIT-STATUSBALKEN + SHORTCUTS + UNTERES HOTBAR-INVENTAR)
   // =========================================================================
   public renderHUD(): void {
-    const curCh = MEDIEVAL_CHAPTERS.find((c) => c.id === gameState.chapter);
-    const relCount = gameState.discoveredRelics.size;
-    const roleLabel =
-      gameState.role === 'knappe'
-        ? 'Schildknappe'
-        : gameState.role === 'skriptor'
-        ? 'Klosterskriptor'
-        : 'Hofbauer';
+    this.hudHeader.style.display = this.activeModal === 'start' ? 'none' : 'flex';
+    this.questBox.style.display = this.activeModal === 'start' ? 'none' : 'flex';
+    if (this.touchControls) {
+      this.touchControls.setVisible(this.activeModal === 'none');
+    }
+
+    const curCh = MEDIEVAL_CHAPTERS.find((c) => c.id === gameState.chapter) || MEDIEVAL_CHAPTERS[0];
+    const roleDef = MEDIEVAL_ROLES.find((r) => r.id === gameState.role) || MEDIEVAL_ROLES[0];
+    const steps = gameState.getQuestStepProgress(curCh.id);
+    const allDone = gameState.checkQuest(curCh.id);
+
+    const taskText = allDone
+      ? `Alle Aufgaben gemeistert! Sprich mit ${curCh.mentor.name} für das Lehns-Quiz (E).`
+      : curCh.objective;
 
     const foodPct = Math.max(0, Math.min(100, Math.round(gameState.food)));
     const safetyPct = Math.max(0, Math.min(100, Math.round(gameState.safety)));
     const knowPct = Math.max(0, Math.min(100, Math.round(gameState.knowledge)));
 
     this.hudHeader.innerHTML = `
-      <div class="hud-left">
-        <span class="hud-ch-badge">⚔️ Kapitel ${curCh?.number || 1}: ${curCh?.title || 'Das Mittelalter'}</span>
-        <span class="hud-player-badge">👤 ${gameState.playerName} (${roleLabel})</span>
-        <div class="hud-status-bars" style="display:flex;align-items:center;gap:10px;background:rgba(15,10,6,0.75);padding:3px 10px;border-radius:6px;border:1px solid rgba(217,119,6,0.45);">
-          <div class="hud-stat-pill" title="Nahrung & Versorgung (Taste F zum Essen)" style="display:flex;align-items:center;gap:5px;font-size:11px;color:#fde68a;">
-            <span>🍞 Nahrung</span>
-            <div style="width:52px;height:7px;background:#291d12;border-radius:4px;overflow:hidden;border:1px solid rgba(251,191,36,0.35);">
-              <div style="width:${foodPct}%;height:100%;background:linear-gradient(90deg,#d97706,#fbbf24);"></div>
-            </div>
-            <strong style="font-size:10px;">${foodPct}%</strong>
-          </div>
-          <div class="hud-stat-pill" title="Schutz & Ordnung (steigt durch Burgbau & Infrastruktur)" style="display:flex;align-items:center;gap:5px;font-size:11px;color:#86efac;">
-            <span>🛡️ Schutz</span>
-            <div style="width:52px;height:7px;background:#11261b;border-radius:4px;overflow:hidden;border:1px solid rgba(74,222,128,0.35);">
-              <div style="width:${safetyPct}%;height:100%;background:linear-gradient(90deg,#16a34a,#4ade80);"></div>
-            </div>
-            <strong style="font-size:10px;">${safetyPct}%</strong>
-          </div>
-          <div class="hud-stat-pill" title="Wissen & Gelehrsamkeit (steigt durch Relikte, Lexikon & Handwerk)" style="display:flex;align-items:center;gap:5px;font-size:11px;color:#93c5fd;">
-            <span>📖 Wissen</span>
-            <div style="width:52px;height:7px;background:#111d33;border-radius:4px;overflow:hidden;border:1px solid rgba(96,165,250,0.35);">
-              <div style="width:${knowPct}%;height:100%;background:linear-gradient(90deg,#2563eb,#60a5fa);"></div>
-            </div>
-            <strong style="font-size:10px;">${knowPct}%</strong>
-          </div>
+      <div class="hud-card" id="hud-quest-box">
+        <div id="hud-chapter-title">
+          ⚔️ Kap. ${curCh.number}: ${curCh.title} (${curCh.eraName || 'Hochmittelalter'}) · ${gameState.playerName} (${roleDef.name})
         </div>
-        <span class="hud-relic-badge">🏺 ${relCount}/5 Relikte</span>
-      </div>
-      <div class="hud-right">
-        <button class="hud-btn" onclick="window.__toggleModal('I')">🎒 Beutel [I]</button>
-        <button class="hud-btn" onclick="window.__toggleModal('C')">🔨 Handwerk [C]</button>
-        <button class="hud-btn" onclick="window.__toggleModal('B')">🏰 Bauen [B]</button>
-        <button class="hud-btn" onclick="window.__toggleModal('H')">⚖️ Markt [H]</button>
-        <button class="hud-btn" onclick="window.__eatFood()">🍞 Essen [F]</button>
-        <button class="hud-btn" onclick="window.__toggleModal('L')">📖 Lexikon [L]</button>
-        <button class="hud-btn" onclick="window.__toggleModal('Z')">⏳ Zeit [Z]</button>
-        <button class="hud-btn" onclick="window.__toggleModal('U')">📜 Urkunde [U]</button>
-        <button class="hud-btn" onclick="window.__toggleModal('M')">${sound.isMuted() ? '🔇' : '🔊'}</button>
-        <button class="hud-btn hud-btn-accent" onclick="window.__toggleModal('P')">⏸️ Menü [P]</button>
-      </div>
-    `;
-
-    // Render Bottom Inventory Hotbar (Steinzeit / Griechenland Standard)
-    if (this.hotbarEl) {
-      const shortNames: Record<string, string> = {
-        brot_fladen: 'Dorfbrot',
-        mehl_sack: 'Mehl',
-        roggen_saat: 'Roggen',
-        hafer_saat: 'Hafer',
-        heuballen: 'Wiesenheu',
-        holz_balken: 'Bauholz',
-        feldstein: 'Bruchstein',
-        eisenerz: 'Eisenerz',
-        eisen_barren: 'Eisen',
-        wasser_eimer: 'Wasser',
-        wollballen: 'Wolle',
-        pergament_bogen: 'Pergament',
-        lehnssiegel_wachs: 'Siegelwachs',
-        heilsalbe_kraeuter: 'Heilsalbe',
-        pflugmesser_eisen: 'Pflugmesser',
-        ritter_hufeisen: 'Hufeisen',
-        wappenschild_rohling: 'Schild',
-        silber_pfennig: 'Silberdenar',
-      };
-      const entries = Object.entries(gameState.inventory).filter(([, count]) => (count || 0) > 0);
-      const slotsHtml = entries
-        .map(([k, count]) => {
-          const def = MEDIEVAL_ITEMS[k as MedievalItemId];
-          if (!def) return '';
-          const label = shortNames[k] || def.name.split(' ')[0];
-          return `
-            <div class="hotbar-slot" title="${def.name} (${count}x)" onclick="window.__toggleModal('I')">
-              <img src="${def.icon}" alt="${def.name}" class="hotbar-icon" />
-              <span class="hotbar-label">${label}</span>
-              <span class="hotbar-qty">x${count}</span>
-            </div>
-          `;
-        })
-        .join('');
-
-      this.hotbarEl.innerHTML = `
-        <div class="hotbar-items-row">
-          ${slotsHtml || '<span style="font-size:11px;color:#d6d3d1;padding:0 8px;">Beutel leer – sammle Holz, Steine oder Getreide mit [E]!</span>'}
-          <button class="hotbar-bag-btn" onclick="window.__toggleModal('I')">🎒 Beutel [I]</button>
-        </div>
-      `;
-    }
-  }
-
-  public renderQuestTracker(): void {
-    const curCh = MEDIEVAL_CHAPTERS.find((c) => c.id === gameState.chapter);
-    if (!curCh) return;
-
-    const steps = gameState.getQuestStepProgress(curCh.id);
-    const allDone = gameState.checkQuest(curCh.id);
-    const nextPending = steps.find((s) => !s.done);
-
-    this.questBox.innerHTML = `
-      <div class="qt-header" id="qt-toggle-btn" style="cursor:pointer;" title="Auftrag ein-/ausklappen">
-        <span class="qt-title">⚔️ KAPITEL ${curCh.number}: ${curCh.title.toUpperCase()}</span>
-        <button class="qt-collapse-btn" style="background:none;border:none;color:#fde047;cursor:pointer;font-size:12px;">${this.questCollapsed ? '➕' : '➖'}</button>
-      </div>
-      ${
-        this.questCollapsed
-          ? ''
-          : `
-        <div class="qt-body">
-          <div class="qt-mentor-row" style="font-size:11px;color:#fef08a;margin-bottom:4px;">Mentor: <strong>${curCh.mentor.name}</strong> (${curCh.mentor.role})</div>
-          <div class="qt-objective" style="font-size:11px;color:#fef3c7;margin-bottom:6px;">
-            <strong>Ziel:</strong> ${curCh.objective}
-          </div>
-          <div class="qt-steps-list" style="display:flex;flex-direction:column;gap:3px;margin:6px 0;">
+        <div id="hud-quest">
+          <div style="margin-bottom:4px;">📋 <strong>Aufgabe:</strong> ${taskText}</div>
+          <div class="quest-steps-list" style="margin:4px 0;">
             ${steps
               .map(
                 (s) => `
-              <div class="qt-step-item ${s.done ? 'step-done' : ''}" style="display:flex;align-items:flex-start;gap:6px;font-size:11px;color:${s.done ? '#86efac' : '#e2e8f0'};">
-                <span class="qt-step-icon" style="font-size:11px;">${s.done ? '✅' : '⬜'}</span>
-                <span class="qt-step-text" style="${s.done ? 'text-decoration:line-through;opacity:0.85;' : ''}">${s.label}</span>
+              <div class="quest-step-item ${s.done ? 'step-done' : ''}" style="display:flex;align-items:center;gap:5px;font-size:11px;color:${s.done ? '#86efac' : '#fef3c7'};">
+                <span>${s.done ? '✅' : '⬜'}</span>
+                <span style="${s.done ? 'text-decoration:line-through;opacity:0.85;' : ''}">${s.label}</span>
               </div>
-            `,
+            `
               )
               .join('')}
           </div>
-          <div class="qt-divider" style="height:1px;background:rgba(217,119,6,0.35);margin:6px 0;"></div>
-          <div class="qt-compass" id="hud-compass" style="font-size:12px;font-weight:700;color:#facc15;">
-            ${gameState.compassText || '🧭 Wegweiser wird berechnet...'}
-          </div>
-          <div class="qt-status-banner ${allDone ? 'ready' : ''}" style="margin-top:6px;font-size:11px;padding:4px 6px;border-radius:4px;background:${allDone ? 'rgba(34,197,94,0.2)' : 'rgba(217,119,6,0.15)'};border:1px solid ${allDone ? '#22c55e' : 'rgba(217,119,6,0.4)'};color:${allDone ? '#86efac' : '#fde047'};">
-            ${
-              allDone
-                ? `✨ Alle 4 Aufgaben erfüllt! Sprich jetzt mit <strong>${curCh.mentor.name}</strong> [E] für das Geschichts-Quiz!`
-                : nextPending
-                ? `💡 Nächster Schritt: ${nextPending.label}`
-                : `💡 Untersuche den Fronhof und folge dem Kompass.`
-            }
-          </div>
-          <div class="qt-action-row" style="margin-top:8px;display:flex;flex-direction:column;gap:5px;">
-            <button class="qt-action-btn" onclick="window.__openMentorDialogForCurrent()" style="width:100%;padding:4px 8px;font-size:11px;font-weight:700;background:#d97706;border:1px solid #f59e0b;color:#1a1006;border-radius:4px;cursor:pointer;">
-              💬 Mit ${curCh.mentor.name} sprechen [E]
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;margin-top:4px;">
+            <span style="font-size:10.5px;color:${allDone ? '#4ade80' : '#fde68a'};">
+              ${allDone ? `✨ Bereit für Lehns-Quiz bei ${curCh.mentor.name} [E]!` : `💡 Mentor: ${curCh.mentor.name} [E]`}
+            </span>
+            <button id="btn-open-mentor-dialog" class="hud-btn" style="padding:2px 7px;font-size:10.5px;">
+              💬 ${curCh.mentor.name}
             </button>
-            ${
-              curCh.id === 4 && !steps[2]?.done
-                ? `<button class="qt-action-btn" onclick="window.__openDilemma('dilemma_ch4_fehde')" style="width:100%;padding:4px 8px;font-size:11px;font-weight:700;background:#b45309;border:1px solid #f59e0b;color:#fff;border-radius:4px;cursor:pointer;">⚖️ Lehnsgericht-Dilemma schlichten</button>`
-                : curCh.id === 8 && !steps[1]?.done
-                ? `<button class="qt-action-btn" onclick="window.__openDilemma('dilemma_ch8_stadtflucht')" style="width:100%;padding:4px 8px;font-size:11px;font-weight:700;background:#b45309;border:1px solid #f59e0b;color:#fff;border-radius:4px;cursor:pointer;">⚖️ Stadtflucht-Dilemma schlichten</button>`
-                : curCh.id === 3 && !steps[1]?.done
-                ? `<button class="qt-action-btn" onclick="window.__openStation('station_kraeuter')" style="width:100%;padding:4px 8px;font-size:11px;font-weight:700;background:#15803d;border:1px solid #4ade80;color:#fff;border-radius:4px;cursor:pointer;">🌿 Kräutermörser-Station öffnen</button>`
-                : curCh.id === 6 && !steps[1]?.done
-                ? `<button class="qt-action-btn" onclick="window.__openStation('station_ruestkammer')" style="width:100%;padding:4px 8px;font-size:11px;font-weight:700;background:#1e40af;border:1px solid #60a5fa;color:#fff;border-radius:4px;cursor:pointer;">🛡️ Rüstkammer-Station öffnen</button>`
-                : ''
-            }
           </div>
         </div>
-      `
-      }
+        <div id="hud-compass" class="hud-compass-line">${gameState.compassText || '🧭 Wegweiser wird berechnet...'}</div>
+      </div>
+
+      <div class="hud-right">
+        <div class="hud-card" id="hud-bars-card">
+          <div class="bar-row" title="Vorräte & Nahrung (Taste F zum Essen)">
+            <span>🍖 Vorräte</span>
+            <div class="bar-track"><div class="bar-fill orange" id="bar-food" style="width:${foodPct}%"></div></div>
+            <span id="val-food">${foodPct}%</span>
+          </div>
+          <div class="bar-row" title="Lehns-Treue & Ordnung (Burgen & Infrastruktur)">
+            <span>🛡️ Lehns-Treue</span>
+            <div class="bar-track"><div class="bar-fill blue" id="bar-safety" style="width:${safetyPct}%"></div></div>
+            <span id="val-safety">${safetyPct}%</span>
+          </div>
+          <div class="bar-row" title="Bildung & Glaube (Relikte & Skriptorium)">
+            <span>📜 Bildung & Glaube</span>
+            <div class="bar-track"><div class="bar-fill yellow" id="bar-knowledge" style="width:${knowPct}%"></div></div>
+            <span id="val-knowledge">${knowPct}%</span>
+          </div>
+          <div class="hud-subinfo">
+            Lexikon: <b id="hud-lex-count">${gameState.unlockedLexicon.size}/27</b> ·
+            🏺 Relikte: <b>${gameState.discoveredRelics.size}/5</b> ·
+            <span id="hud-time-of-day">☀️ Tag</span> ·
+            🎵 Musik: <b id="hud-music-state">${sound.bgmMuted ? 'Aus' : 'An'}</b>
+          </div>
+        </div>
+
+        <div class="hud-btn-row">
+          <button class="hud-btn ${this.activeModal === 'pause' ? 'active' : ''}" id="btn-pause" data-modal="pause" title="Pause-Dashboard [P / ESC]"><span class="key-badge">P</span> ⏸ Pause</button>
+          <button class="hud-btn ${this.activeModal === 'inventory' ? 'active' : ''}" id="btn-bag" data-modal="inventory" title="Beutel & Relikte [I]"><span class="key-badge">I</span> 🎒 Beutel</button>
+          <button class="hud-btn ${this.activeModal === 'craft' ? 'active' : ''}" id="btn-craft" data-modal="craft" title="Handwerk [C]"><span class="key-badge">C</span> Handwerk</button>
+          <button class="hud-btn ${this.activeModal === 'trade' ? 'active' : ''}" id="btn-trade" data-modal="trade" title="Markt [H]"><span class="key-badge">H</span> Markt</button>
+          <button class="hud-btn ${this.activeModal === 'lexicon' ? 'active' : ''}" id="btn-lexicon" data-modal="lexicon" title="Mittelalter-Lexikon (27 Begriffe) [L]"><span class="key-badge">L</span> Lexikon</button>
+          <button class="hud-btn ${this.activeModal === 'timeline' ? 'active' : ''}" id="btn-timeline" data-modal="timeline" title="Epochen-Zeitstrahl [Z]"><span class="key-badge">Z</span> Zeitstrahl</button>
+          <button class="hud-btn" id="btn-eat" data-action="eat" title="Proviant essen [F]"><span class="key-badge">F</span> Essen</button>
+          <button class="hud-btn" id="btn-music" data-action="music" title="Musik an/aus [M]"><span class="key-badge">M</span> 🎵 Musik</button>
+          <button class="hud-btn" id="btn-epoch" data-modal="start" title="Kapitel wählen [K]"><span class="key-badge">K</span> Epoche</button>
+          <button class="hud-btn ${this.activeModal === 'certificate' ? 'active' : ''}" id="btn-cert" data-modal="certificate" title="Chronisten-Diplom [U]"><span class="key-badge">U</span> Diplom</button>
+        </div>
+      </div>
     `;
 
-    document.getElementById('qt-toggle-btn')?.addEventListener('click', (e) => {
-      e.stopPropagation();
-      this.questCollapsed = !this.questCollapsed;
-      this.renderQuestTracker();
+    const mentorBtn = this.hudHeader.querySelector('#btn-open-mentor-dialog');
+    if (mentorBtn) {
+      mentorBtn.addEventListener('click', () => {
+        sound.click();
+        this.openMentorDialog(curCh);
+      });
+    }
+
+    this.hudHeader.querySelectorAll('.hud-btn').forEach((btn) => {
+      if (btn.id === 'btn-open-mentor-dialog') return;
+      btn.addEventListener('click', () => {
+        const action = btn.getAttribute('data-action');
+        if (action === 'eat') {
+          this.eatFood();
+          return;
+        }
+        if (action === 'music') {
+          this.handleShortcutKey('M');
+          return;
+        }
+        const m = btn.getAttribute('data-modal') as ModalType;
+        if (m) {
+          if (m === 'start') {
+            this.openStartScreen();
+          } else if (m === 'pause') {
+            this.openPauseDashboard();
+          } else if (m === 'inventory') {
+            this.openInventoryModal();
+          } else if (m === 'craft') {
+            this.openCraftModal();
+          } else if (m === 'trade') {
+            this.openTradeModal();
+          } else if (m === 'lexicon') {
+            this.openLexiconModal();
+          } else if (m === 'timeline') {
+            this.openTimelineModal();
+          } else if (m === 'certificate') {
+            this.openCertificateModal();
+          }
+        }
+      });
+    });
+  }
+
+  public renderQuestTracker(): void {
+    this.questBox.style.display = this.activeModal === 'start' ? 'none' : 'flex';
+    const hotbarItems: MedievalItemId[] = [
+      'roggen_saat',
+      'brot_fladen',
+      'holz_balken',
+      'feldstein',
+      'eisen_barren',
+      'ritter_hufeisen',
+      'pergament_bogen',
+      'silber_pfennig',
+    ];
+
+    const slotsHtml = hotbarItems
+      .map((itemId, idx) => {
+        const def = MEDIEVAL_ITEMS[itemId];
+        const qty = gameState.inventory[itemId] || 0;
+        return `
+          <div class="hotbar-slot ${qty > 0 ? 'has-item' : ''}" data-slot-item="${itemId}" title="${def ? def.name : itemId} (${qty} im Beutel)">
+            <img src="${def ? def.icon : '/assets/icons/relic_marker_glow.png'}" alt="${def ? def.name : itemId}" style="opacity:${qty > 0 ? '1' : '0.32'}" />
+            <span class="count">${qty > 0 ? qty : idx + 1}</span>
+          </div>
+        `;
+      })
+      .join('');
+
+    const relicSlotsHtml = MEDIEVAL_RELICS.map((r) => {
+      const found = gameState.discoveredRelics.has(r.id);
+      return `
+        <div class="hotbar-slot relic-slot ${found ? 'has-item' : ''}" data-slot-relic="${r.id}" title="${found ? r.name : `Unentdecktes Relikt`}">
+          <img src="${r.icon}" alt="${r.name}" style="opacity:${found ? '1' : '0.25'}" />
+          <span class="count">${found ? '★' : '🔒'}</span>
+        </div>
+      `;
+    }).join('');
+
+    this.questBox.innerHTML = `
+      <div id="hud-hint">WASD / Pfeiltasten = Bewegen · E = Interagieren · F = Essen · C = Handwerk · I = Beutel · P = Pause</div>
+      <div class="hud-bottom-row">
+        <div id="hud-hotbar">
+          ${slotsHtml}
+          ${relicSlotsHtml}
+        </div>
+        <button class="hud-btn" id="btn-hotbar-bag" title="Beutel öffnen [I]">
+          <span class="key-badge">I</span> 🎒 Beutel
+        </button>
+      </div>
+    `;
+
+    this.questBox.querySelector('#btn-hotbar-bag')?.addEventListener('click', () => {
+      this.openInventoryModal();
+    });
+
+    this.questBox.querySelectorAll('[data-slot-item]').forEach((el) => {
+      el.addEventListener('click', () => {
+        this.openInventoryModal();
+      });
+    });
+
+    this.questBox.querySelectorAll('[data-slot-relic]').forEach((el) => {
+      el.addEventListener('click', () => {
+        const relId = el.getAttribute('data-slot-relic');
+        if (relId) this.openArtifactInspector(relId);
+      });
     });
   }
 
@@ -537,8 +576,14 @@ export class UIScene extends Phaser.Scene {
             <div class="form-group">
               <label>2. Figur wählen:</label>
               <div class="gender-btn-group">
-                <button class="role-btn ${gameState.gender === 'male' ? 'active' : ''}" id="btn-gender-male">👦 Konrad (Knappe)</button>
-                <button class="role-btn ${gameState.gender === 'female' ? 'active' : ''}" id="btn-gender-female">👧 Mathilda (Bäuerin)</button>
+                <button class="role-btn ${gameState.gender === 'male' ? 'active' : ''}" id="btn-gender-male">
+                  <img src="/assets/characters/keep_squire.png" style="width:20px;height:40px;image-rendering:pixelated;vertical-align:middle;margin-right:6px;" />
+                  👦 Konrad (Knappe)
+                </button>
+                <button class="role-btn ${gameState.gender === 'female' ? 'active' : ''}" id="btn-gender-female">
+                  <img src="/assets/characters/keep_peasant_f.png" style="width:20px;height:40px;image-rendering:pixelated;vertical-align:middle;margin-right:6px;" />
+                  👧 Mathilda (Bäuerin)
+                </button>
               </div>
             </div>
           </div>
@@ -830,244 +875,34 @@ export class UIScene extends Phaser.Scene {
   // =========================================================================
   // 3. 360° ARTIFACT INSPECTOR
   // =========================================================================
-  public openArtifactInspector(rel: MedievalRelic): void {
-    this.activeModal = 'inspector';
-    this.activeRelic = rel;
-    this.isRelicFlipped = false;
-    this.touchControls.setVisible(false);
-    this.modalOverlay.style.display = 'flex';
-    this.renderInspector();
-  }
-
-  private renderInspector(): void {
-    if (!this.activeRelic) return;
-    const r = this.activeRelic;
-
-    this.modalOverlay.innerHTML = `
-      <div class="modal-card inspector-card">
-        <div class="inspector-header">
-          <span class="inspector-badge">🏺 360° ARCHÄOLOGIE- & PRIMÄRQUELLEN-INSPEKTOR</span>
-          <button class="modal-close-btn" onclick="window.__toggleModal('ESC')">✕ Schließen</button>
-        </div>
-        <div class="inspector-body">
-          <div class="inspector-visual">
-            <div class="artifact-flip-wrap ${this.isRelicFlipped ? 'flipped' : ''}">
-              <img src="${r.icon}" class="artifact-img-large" />
-            </div>
-            <button class="btn-flip" id="btn-flip-artifact">🔄 Fundstück wenden (360°)</button>
-            <div class="artifact-side-tag">${this.isRelicFlipped ? 'Revers / Rückseite' : 'Avers / Vorderseite'}</div>
-          </div>
-          <div class="inspector-details">
-            <div class="artifact-meta">
-              <h2>${r.titleDe}</h2>
-              <div class="meta-tags">
-                <span class="tag-pill">⏳ ${r.era}</span>
-                <span class="tag-pill">📍 ${r.location}</span>
-              </div>
-            </div>
-            <div class="artifact-description-box">
-              <h3>Wissenschaftlicher Befund:</h3>
-              <p>${this.isRelicFlipped ? r.descriptionBack : r.descriptionFront}</p>
-            </div>
-            <div class="didactic-fact-box">
-              ${r.didacticFact}
-            </div>
-          </div>
-        </div>
-      </div>
-    `;
-
-    document.getElementById('btn-flip-artifact')?.addEventListener('click', () => {
-      sound.click();
-      this.isRelicFlipped = !this.isRelicFlipped;
-      this.renderInspector();
+  public openArtifactInspector(relicIdOrObj: string | MedievalRelic): void {
+    const id = typeof relicIdOrObj === 'string' ? relicIdOrObj : relicIdOrObj?.id;
+    const rel = MEDIEVAL_RELICS.find((r) => r.id === id) || MEDIEVAL_RELICS[0];
+    if (!rel) return;
+    this.closeModal();
+    this.artifactInspector.open(rel, () => {
+      this.renderHUD();
     });
   }
 
   // =========================================================================
-  // 4. HAPTISCHE MINI-STATIONEN (Kräutermörser & Rüstkammer)
+  // 4. HAPTISCHE MINI-STATIONEN & PROVIANT
   // =========================================================================
-  public openStation(stationId: string): void {
-    const st = MEDIEVAL_STATIONS.find((s) => s.id === stationId);
+  public eatFood(): void {
+    const msg = gameState.eat();
+    this.showToast(msg);
+    this.renderHUD();
+  }
+
+  public openStation(stationIdOrObj: string | InteractiveStation): void {
+    const id = typeof stationIdOrObj === 'string' ? stationIdOrObj : stationIdOrObj?.id;
+    const st = MEDIEVAL_STATIONS.find((s) => s.id === id) || MEDIEVAL_STATIONS[0];
     if (!st) return;
-    this.activeModal = 'station';
-    this.activeStation = st;
-    this.selectedStationItems = [];
-    this.stationArmoryStep = 1;
-    this.touchControls.setVisible(false);
-    this.modalOverlay.style.display = 'flex';
-    this.renderStation();
-  }
-
-  private renderStation(): void {
-    if (!this.activeStation) return;
-    const st = this.activeStation;
-
-    if (st.type === 'mortar') {
-      this.renderMortarStation(st);
-    } else {
-      this.renderArmoryStation(st);
-    }
-  }
-
-  private renderMortarStation(st: StationDef): void {
-    const ings = st.config.allIngredients || [];
-
-    this.modalOverlay.innerHTML = `
-      <div class="modal-card station-card">
-        <div class="modal-header">
-          <span class="modal-tag">🌿 Klostermedizin</span>
-          <h2>${st.title}</h2>
-          <div class="station-sub">${st.instructionText}</div>
-        </div>
-        <p class="station-context">${st.historicalContext}</p>
-        <div class="mortar-interface">
-          <div class="mortar-pot">
-            <div class="pot-circle">🥣 Steinmörser</div>
-            <div class="pot-contents">
-              ${
-                this.selectedStationItems.length === 0
-                  ? '<span class="empty-tip">Noch keine Kräuter im Mörser</span>'
-                  : this.selectedStationItems
-                      .map((id) => {
-                        const item = ings.find((x: any) => x.id === id);
-                        return `<span class="ing-chip">🍃 ${item?.name || id}</span>`;
-                      })
-                      .join(' ')
-              }
-            </div>
-          </div>
-          <div class="mortar-ingredients">
-            <h3>Verfügbare Arzneipflanzen im Klostergarten:</h3>
-            <div class="ingredients-list">
-              ${ings
-                .map((ing: any) => {
-                  const isSelected = this.selectedStationItems.includes(ing.id);
-                  return `
-                  <button class="ing-btn ${isSelected ? 'selected' : ''}" data-id="${ing.id}">
-                    <strong>${ing.name}</strong>
-                    <span>${ing.role}</span>
-                  </button>
-                `;
-                })
-                .join('')}
-            </div>
-          </div>
-        </div>
-        <div class="station-actions">
-          <button class="btn-sub" id="btn-mortar-reset">Mörser leeren</button>
-          <button class="btn-primary" id="btn-mortar-mix">🌿 Salbe zerstoßen & rühren</button>
-        </div>
-      </div>
-    `;
-
-    this.modalOverlay.querySelectorAll('.ing-btn').forEach((btn) => {
-      btn.addEventListener('click', (e) => {
-        sound.click();
-        const id = (e.currentTarget as HTMLElement).dataset.id || '';
-        if (this.selectedStationItems.includes(id)) {
-          this.selectedStationItems = this.selectedStationItems.filter((x) => x !== id);
-        } else {
-          if (this.selectedStationItems.length < 3) {
-            this.selectedStationItems.push(id);
-          }
-        }
-        this.renderMortarStation(st);
-      });
-    });
-
-    document.getElementById('btn-mortar-reset')?.addEventListener('click', () => {
-      sound.click();
-      this.selectedStationItems = [];
-      this.renderMortarStation(st);
-    });
-
-    document.getElementById('btn-mortar-mix')?.addEventListener('click', () => {
-      const correct = st.config.requiredIngredients || [];
-      const isComplete =
-        this.selectedStationItems.length === 3 &&
-        correct.every((x: string) => this.selectedStationItems.includes(x));
-
-      if (isComplete) {
-        sound.success();
-        gameState.addInventory(st.rewardItem, st.rewardQty);
-        gameState.storyFlags['station_kraeuter_done'] = true;
-        gameState.notify();
-        this.showToast(`✅ Wundsalbe perfekt zubereitet! +${st.rewardQty} ${MEDIEVAL_ITEMS[st.rewardItem].name}`);
-        this.closeModal();
-      } else {
-        sound.click();
-        this.showToast('❌ Diese Mischung heilt noch nicht. Wähle die 3 richtigen Kräuter!');
-      }
-    });
-  }
-
-  private renderArmoryStation(st: StationDef): void {
-    const steps = st.config.steps || [];
-    const currentStepDef = steps.find((s: any) => s.step === this.stationArmoryStep);
-
-    this.modalOverlay.innerHTML = `
-      <div class="modal-card station-card">
-        <div class="modal-header">
-          <span class="modal-tag">🛡️ Waffenkammer</span>
-          <h2>${st.title}</h2>
-          <div class="station-sub">${st.instructionText}</div>
-        </div>
-        <p class="station-context">${st.historicalContext}</p>
-        <div class="armory-interface">
-          <div class="knight-silhouette">
-            <div class="silhouette-title">Ritter-Rüstungsstand (${this.stationArmoryStep}/4):</div>
-            <div class="armored-layers">
-              ${steps
-                .filter((s: any) => s.step < this.stationArmoryStep)
-                .map((s: any) => `<div class="layer-item done">✓ ${s.name}</div>`)
-                .join('')}
-              ${currentStepDef ? `<div class="layer-item current">👉 ${currentStepDef.name} (ausstehend)</div>` : '<div class="layer-item all-done">🎉 Vollständig gerüstet!</div>'}
-            </div>
-          </div>
-          <div class="armory-choices">
-            <h3>Welches Teil legst du als Nächstes an?</h3>
-            <div class="choices-list">
-              ${steps
-                .map(
-                  (s: any) => `
-                <button class="choice-btn ${s.step < this.stationArmoryStep ? 'done' : ''}" data-step="${s.step}">
-                  <strong>${s.name}</strong>
-                  <span>${s.desc}</span>
-                </button>
-              `,
-                )
-                .join('')}
-            </div>
-          </div>
-        </div>
-      </div>
-    `;
-
-    this.modalOverlay.querySelectorAll('.choice-btn').forEach((btn) => {
-      btn.addEventListener('click', (e) => {
-        const stepNum = parseInt((e.currentTarget as HTMLElement).dataset.step || '0', 10);
-        if (stepNum === this.stationArmoryStep) {
-          sound.questStep();
-          this.stationArmoryStep++;
-          if (this.stationArmoryStep > 4) {
-            sound.success();
-            gameState.addInventory(st.rewardItem, st.rewardQty);
-            gameState.storyFlags['station_ruestkammer_done'] = true;
-            gameState.notify();
-            this.showToast(`✅ Ritterrüstung vollendet! +${st.rewardQty} ${MEDIEVAL_ITEMS[st.rewardItem].name}`);
-            this.closeModal();
-          } else {
-            this.renderArmoryStation(st);
-          }
-        } else if (stepNum < this.stationArmoryStep) {
-          sound.click();
-          this.showToast('Das hast du bereits angelegt!');
-        } else {
-          sound.click();
-          this.showToast('❌ Falsche Reihenfolge! Eine Rüstung wird schichtweise von innen nach außen angelegt.');
-        }
-      });
+    this.closeModal();
+    this.stationModal.open(st, () => {
+      this.showToast(`🏛️ Station gemeistert: ${st.title}! (+100 Punkte)`);
+      sound.playSuccess();
+      this.renderHUD();
     });
   }
 
@@ -1434,37 +1269,10 @@ export class UIScene extends Phaser.Scene {
   // 7. HISTORISCHER PHASEN-ZEITSTRAHL (Z) & URKUNDE (U)
   // =========================================================================
   public openTimelineModal(): void {
-    this.activeModal = 'timeline';
-    this.touchControls.setVisible(false);
-    this.modalOverlay.style.display = 'flex';
-
-    this.modalOverlay.innerHTML = `
-      <div class="modal-card">
-        <div class="modal-header">
-          <span class="modal-tag">⏳ THEMENINTERNER PHASEN-ZEITSTRAHL</span>
-          <button class="modal-close-btn" onclick="window.__toggleModal('ESC')">✕ Schließen</button>
-        </div>
-        <div class="timeline-container">
-          <div class="timeline-line"></div>
-          <div class="timeline-nodes">
-            ${MEDIEVAL_CHAPTERS.map((c) => {
-              const done = gameState.completedChapters.has(c.id);
-              const isCur = c.id === gameState.chapter;
-              return `
-                <div class="tl-node ${done ? 'done' : isCur ? 'current' : ''}">
-                  <div class="tl-circle">${c.roman}</div>
-                  <div class="tl-body">
-                    <strong>${c.title}</strong>
-                    <span>${c.eraName}</span>
-                    <p>${c.sub}</p>
-                  </div>
-                </div>
-              `;
-            }).join('')}
-          </div>
-        </div>
-      </div>
-    `;
+    this.closeModal();
+    this.timelineModal.open(() => {
+      this.renderHUD();
+    });
   }
 
   public openCertificateModal(): void {

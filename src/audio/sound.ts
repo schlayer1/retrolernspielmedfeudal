@@ -197,6 +197,42 @@ export class SoundManager {
     return this.muted;
   }
 
+  public get bgmMuted(): boolean {
+    return this.muted;
+  }
+
+  public playClick(): void {
+    this.click();
+  }
+
+  public playSelect(): void {
+    this.click();
+  }
+
+  public playSuccess(): void {
+    this.success();
+  }
+
+  public playFanfare(): void {
+    this.success();
+  }
+
+  public playCollect(): void {
+    this.pet();
+  }
+
+  public step(surface: 'stone' | 'dirt' | 'grass' | 'wood' = 'grass'): void {
+    this.footstep(surface);
+  }
+
+  public playFootstep(surface: 'stone' | 'dirt' | 'grass' | 'wood' = 'grass'): void {
+    this.footstep(surface);
+  }
+
+  public toggleBGM(): void {
+    this.toggleMute();
+  }
+
   public getVolume(): number {
     return this.volume;
   }

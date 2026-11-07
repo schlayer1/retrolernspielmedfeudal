@@ -88,6 +88,7 @@ export class WorldScene extends Phaser.Scene {
 
     // 3. Dense Ground Flora Scattering (150+ grass tufts, wildflowers, pebbles, mushrooms)
     this.scatterGroundFlora();
+    this.buildPlateauCliffs();
 
     // 4. Living River Shores & Water Infrastructure
     this.buildRiverShores();
@@ -121,10 +122,10 @@ export class WorldScene extends Phaser.Scene {
     this.player.setScale(1.0);
     this.player.setDepth(this.player.y);
 
-    // 10. Setup Camera
+    // 10. Setup Camera (Native 480x270 FIT standard)
     this.cameras.main.setBounds(0, 0, this.mapW * 16, this.mapH * 16);
     this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
-    this.cameras.main.setZoom(2.2);
+    this.cameras.main.setZoom(1.0);
 
     // 11. Companion Unlock (Kapitel 1)
     this.companionManager.unlock(this.player.x - 20, this.player.y);
@@ -135,6 +136,7 @@ export class WorldScene extends Phaser.Scene {
 
     // Expose interaction trigger globally for DOM label click & UI scene
     (window as any).__triggerInteraction = () => this.triggerInteraction();
+    (window as any).__enterSampleInterior = () => this.enterInterior('burgsaal_palas');
 
     // 13. Init Wildlife & Living World
     this.wildlifeManager.init();
@@ -883,6 +885,100 @@ export class WorldScene extends Phaser.Scene {
       actionTip: '[E] Stadtflucht-Streit an der Gerichtslinde schlichten',
     });
 
+    // 4c. Begehbare Innenräume (Türen)
+    this.targets.push({
+      id: 'door_burgsaal',
+      kind: 'interactive_quest',
+      name: 'Palas & Rittersaal betreten',
+      sub: 'Burg Steinfels',
+      x: 22 * 16,
+      y: 28 * 16,
+      minChapter: 1,
+      actionTip: '[E] In den Rittersaal eintreten 🚪',
+    });
+    this.targets.push({
+      id: 'door_kloster',
+      kind: 'interactive_quest',
+      name: 'Klosterapotheke & Skriptorium',
+      sub: 'Konvent St. Benedikt',
+      x: 84 * 16,
+      y: 20 * 16,
+      minChapter: 1,
+      actionTip: '[E] In das Skriptorium eintreten 🚪',
+    });
+    this.targets.push({
+      id: 'door_schmiede',
+      kind: 'interactive_quest',
+      name: 'Dorfschmiede & Rennofen',
+      sub: 'Meierhof',
+      x: 36 * 16,
+      y: 54 * 16,
+      minChapter: 1,
+      actionTip: '[E] In die Schmiede eintreten 🚪',
+    });
+    this.targets.push({
+      id: 'door_zunftstube',
+      kind: 'interactive_quest',
+      name: 'Zunftstube der Kaufleute',
+      sub: 'Marktplatz',
+      x: 32 * 16,
+      y: 42 * 16,
+      minChapter: 1,
+      actionTip: '[E] In die Zunftstube eintreten 🚪',
+    });
+
+    // 4d. 5 Didaktische Mitmach-Stationen
+    this.targets.push({
+      id: 'station_dreifelderwirtschaft',
+      kind: 'interactive_quest',
+      name: 'Station: Dreifelderwirtschaft & Pflug',
+      sub: 'Südfeld / Ackerflur',
+      x: 64 * 16,
+      y: 58 * 16,
+      minChapter: 1,
+      actionTip: '[E] Station Dreifelderwirtschaft öffnen 🌾',
+    });
+    this.targets.push({
+      id: 'station_kraeuter',
+      kind: 'interactive_quest',
+      name: 'Station: Arznei-Mörser im Klostergarten',
+      sub: 'Infirmerie St. Benedikt',
+      x: 82 * 16,
+      y: 28 * 16,
+      minChapter: 1,
+      actionTip: '[E] Station Klostermedizin öffnen 🌿',
+    });
+    this.targets.push({
+      id: 'station_ruestkammer',
+      kind: 'interactive_quest',
+      name: 'Station: Rüstkammer & Ritterrüstung',
+      sub: 'Burg Steinfels',
+      x: 18 * 16,
+      y: 24 * 16,
+      minChapter: 1,
+      actionTip: '[E] Station Rüstkammer öffnen 🛡️',
+    });
+    this.targets.push({
+      id: 'station_zunft_waage',
+      kind: 'interactive_quest',
+      name: 'Station: Zunft- & Tuchwaage',
+      sub: 'Marktplatz',
+      x: 34 * 16,
+      y: 46 * 16,
+      minChapter: 1,
+      actionTip: '[E] Station Zunftwaage öffnen ⚖️',
+    });
+    this.targets.push({
+      id: 'station_kathedral_gewoelbe',
+      kind: 'interactive_quest',
+      name: 'Station: Dombauhütte & Gewölbe',
+      sub: 'Bauhütte der Kathedrale',
+      x: 24 * 16,
+      y: 18 * 16,
+      minChapter: 1,
+      actionTip: '[E] Station Dombau & Gewölbe öffnen 🏛️',
+    });
+
     // 5. Interaktive Dorf- & Hof-Objekte aus MEDIEVAL_DECOR
     for (const d of MEDIEVAL_DECOR) {
       if (d.interactive) {
@@ -997,10 +1093,39 @@ export class WorldScene extends Phaser.Scene {
     this.isDialogZoomed = false;
     this.tweens.add({
       targets: this.cameras.main,
-      zoom: 2.2,
+      zoom: 1.0,
       duration: 400,
       ease: 'Cubic.easeInOut',
     });
+  }
+
+  public enterInterior(roomId: string, returnX?: number, returnY?: number): void {
+    this.scene.pause('WorldScene');
+    this.scene.launch('InteriorScene', {
+      roomId,
+      returnX: returnX ?? this.player.x,
+      returnY: returnY ?? this.player.y,
+    });
+  }
+
+  public buildPlateauCliffs(): void {
+    const stairCols = [32, 68];
+    for (const sx of stairCols) {
+      if (this.textures.get('world_atlas')?.has('stairs_stone')) {
+        this.add
+          .image(sx * 16, 13 * 16, 'world_atlas', 'stairs_stone')
+          .setScale(0.75)
+          .setDepth(4);
+      }
+    }
+    if (this.textures.exists('cliffs_nature')) {
+      for (let tx = 6; tx < 94; tx += 4) {
+        if (tx >= 30 && tx <= 34) continue;
+        if (tx >= 66 && tx <= 70) continue;
+        if (tx >= 11 && tx <= 19) continue;
+        this.add.image(tx * 16, 12 * 16, 'cliffs_nature').setDepth(3);
+      }
+    }
   }
 
   private getPlayerSurface(): 'stone' | 'dirt' | 'grass' | 'wood' {
@@ -1381,6 +1506,33 @@ export class WorldScene extends Phaser.Scene {
     if (!this.activeTarget) return;
 
     sound.click();
+
+    // 0. Begehbare Innenräume (Türen)
+    if (this.activeTarget.id === 'door_burgsaal') {
+      this.enterInterior('burgsaal_palas');
+      return;
+    }
+    if (this.activeTarget.id === 'door_kloster') {
+      this.enterInterior('klosterapotheke_skriptorium');
+      return;
+    }
+    if (this.activeTarget.id === 'door_schmiede') {
+      this.enterInterior('dorfschmiede_hufeisen');
+      return;
+    }
+    if (this.activeTarget.id === 'door_zunftstube') {
+      this.enterInterior('zunftstube_rathaus');
+      return;
+    }
+
+    // 0b. 5 Didaktische Mitmach-Stationen
+    if (this.activeTarget.id.startsWith('station_')) {
+      const win = window as any;
+      if (win.__openStation) {
+        win.__openStation(this.activeTarget.id);
+      }
+      return;
+    }
 
     // 1. Companion
     if (this.activeTarget.kind === 'companion') {

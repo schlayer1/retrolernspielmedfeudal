@@ -318,6 +318,16 @@ export class GameState {
     }
   }
 
+  public markLexiconRead(id: string): void {
+    this.lexiconRead.add(id);
+    this.knowledge = Math.min(100, this.knowledge + 2);
+    this.notify();
+  }
+
+  public get unlockedLexicon(): Set<string> {
+    return this.lexiconRead;
+  }
+
   public completeChapter(ch: number, quizScore: number): void {
     this.completedChapters.add(ch);
     if (quizScore >= 1) {

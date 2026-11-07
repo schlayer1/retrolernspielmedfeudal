@@ -30,6 +30,13 @@ export interface ChapterData {
   quiz: ChapterQuiz;
   eraName: string;
   rewards: { items?: Record<string, number>; epochenpunkte?: number };
+  targetInterior?: string;
+  music?: {
+    trackId: string;
+    title: string;
+    style: string;
+    prompt: string;
+  };
 }
 
 export const MEDIEVAL_CHAPTERS: ChapterData[] = [
@@ -82,6 +89,13 @@ export const MEDIEVAL_CHAPTERS: ChapterData[] = [
     },
     eraName: 'Das Frühmittelalterliche Erbe',
     rewards: { items: { roggen_saat: 5, holz_balken: 3 }, epochenpunkte: 100 },
+    targetInterior: 'dorfschmiede_hufeisen',
+    music: {
+      trackId: 'med_k01_fronhof',
+      title: 'Fronhof & Scholle',
+      style: '16-bit medieval lute, shawm & tambour',
+      prompt: 'Authentic 16-bit SNES medieval village theme with acoustic lute, wooden flute, recorder and rustic percussion.',
+    },
   },
 
   // =========================================================================
@@ -133,6 +147,13 @@ export const MEDIEVAL_CHAPTERS: ChapterData[] = [
     },
     eraName: 'Die Agrarrevolution',
     rewards: { items: { hafer_saat: 6, brot_fladen: 2 }, epochenpunkte: 120 },
+    targetInterior: 'dorfschmiede_hufeisen',
+    music: {
+      trackId: 'med_k02_dreifelder',
+      title: 'Ackerflur & Wendepflug',
+      style: 'Pastoral medieval folk with recorder and hurdy-gurdy',
+      prompt: 'Charming pastoral 16-bit folk melody with hurdy-gurdy, acoustic guitar and cheerful wooden flutes.',
+    },
   },
 
   // =========================================================================
@@ -184,6 +205,13 @@ export const MEDIEVAL_CHAPTERS: ChapterData[] = [
     },
     eraName: 'Das Klosterzeitalter',
     rewards: { items: { heilsalbe_kraeuter: 3, pergament_bogen: 2 }, epochenpunkte: 150 },
+    targetInterior: 'klosterapotheke_skriptorium',
+    music: {
+      trackId: 'med_k03_kloster',
+      title: 'Ora et Labora – Klostergesang',
+      style: 'Gregorian chant inspired 16-bit organum with pipe organ and monastic chime',
+      prompt: 'Sacred medieval monastic chant in 16-bit style with soft pipe organ, ethereal choir hums and bell chimes.',
+    },
   },
 
   // =========================================================================
@@ -235,6 +263,13 @@ export const MEDIEVAL_CHAPTERS: ChapterData[] = [
     },
     eraName: 'Das Feudalsystem',
     rewards: { items: { silber_pfennig: 5, lehnssiegel_wachs: 2 }, epochenpunkte: 180 },
+    targetInterior: 'burgsaal_palas',
+    music: {
+      trackId: 'med_k04_lehnswesen',
+      title: 'Der Treueschwur des Lehnsherrn',
+      style: 'Majestic feudal court fanfare with brass, regal timpani and harp',
+      prompt: 'Regal medieval court fanfare with brass horns, majestic timpani rolls and harp arpeggios.',
+    },
   },
 
   // =========================================================================
@@ -286,6 +321,13 @@ export const MEDIEVAL_CHAPTERS: ChapterData[] = [
     },
     eraName: 'Das Burgenzeitalter',
     rewards: { items: { holz_balken: 4, eisen_barren: 3 }, epochenpunkte: 200 },
+    targetInterior: 'burgsaal_palas',
+    music: {
+      trackId: 'med_k05_hohenburg',
+      title: 'Burg Steinfels Wehranlagen',
+      style: 'Stately castle march with heavy drums, trumpets and strings',
+      prompt: 'Stately castle theme with marching snare, triumphant trumpet calls and rich strings.',
+    },
   },
 
   // =========================================================================
@@ -337,6 +379,13 @@ export const MEDIEVAL_CHAPTERS: ChapterData[] = [
     },
     eraName: 'Das Rittertum',
     rewards: { items: { wappenschild_rohling: 1, ritter_hufeisen: 2 }, epochenpunkte: 220 },
+    targetInterior: 'burgsaal_palas',
+    music: {
+      trackId: 'med_k06_rittertum',
+      title: 'Ritterschlag & Wappenehre',
+      style: 'Noble chivalric theme with acoustic guitar, brass swells and glockenspiel',
+      prompt: 'Noble knightly chivalric theme with lute picking, brass swells and resonant glockenspiel.',
+    },
   },
 
   // =========================================================================
@@ -388,6 +437,13 @@ export const MEDIEVAL_CHAPTERS: ChapterData[] = [
     },
     eraName: 'Die Hofkultur',
     rewards: { items: { wollballen: 3, silber_pfennig: 6 }, epochenpunkte: 250 },
+    targetInterior: 'zunftstube_rathaus',
+    music: {
+      trackId: 'med_k07_markt_turnier',
+      title: 'Turnierplatz & Stadtmarkt',
+      style: 'Festive Renaissance/medieval fair with shawms, bagpipe and tambourine',
+      prompt: 'Lively bustling medieval town festival with bagpipes, shawms, clapping tambourines and festive recorders.',
+    },
   },
 
   // =========================================================================
@@ -439,5 +495,14 @@ export const MEDIEVAL_CHAPTERS: ChapterData[] = [
     },
     eraName: 'Das Erbe des Mittelalters',
     rewards: { items: { silber_pfennig: 10, pergament_bogen: 5 }, epochenpunkte: 300 },
+    targetInterior: 'burgsaal_palas',
+    music: {
+      trackId: 'med_k08_staendeordnung',
+      title: 'Spiegel des Mittelalters',
+      style: 'Solemn reflective medieval epilogue with cello, lute and gentle chimes',
+      prompt: 'Reflective solemn medieval conclusion with cello melodies, acoustic lute and gentle chimes.',
+    },
   },
 ];
+
+export const CHAPTERS = MEDIEVAL_CHAPTERS;
