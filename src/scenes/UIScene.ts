@@ -156,6 +156,7 @@ export class UIScene extends Phaser.Scene {
 
     this.uiRoot.appendChild(this.hudHeader);
     this.uiRoot.appendChild(this.questBox);
+    this.uiRoot.appendChild(this.hotbarEl);
     this.uiRoot.appendChild(this.modalOverlay);
     this.uiRoot.appendChild(this.toastContainer);
   }
@@ -284,6 +285,9 @@ export class UIScene extends Phaser.Scene {
     this.artifactInspector.close();
     this.timelineModal.close();
     this.touchControls.setVisible(true);
+
+    this.renderHUD();
+    this.renderQuestTracker();
 
     const world = this.scene.get('WorldScene') as WorldScene;
     if (world && world.resetDialogFocus) {
@@ -763,12 +767,15 @@ export class UIScene extends Phaser.Scene {
     const ch = this.activeChapterDialog;
     const line = this.dialogLines[this.dialogIndex];
     const allDone = gameState.checkQuest(ch.id);
+    const portraitSrc = ch.mentor.portraitKey
+      ? `/assets/portraits/${ch.mentor.portraitKey}_${allDone ? 'happy' : 'neutral'}.png`
+      : ch.mentor.avatar;
 
     this.modalOverlay.innerHTML = `
       <div class="dialog-box">
         <div class="dialog-avatar-wrap">
           <div class="dialog-avatar-frame">
-            <div class="dialog-avatar-crop" style="background-image: url('${ch.mentor.avatar}');"></div>
+            <img src="${portraitSrc}" alt="${ch.mentor.name}" class="dialog-avatar-img" style="width:64px;height:64px;object-fit:cover;image-rendering:pixelated;" />
           </div>
           <div class="dialog-speaker-name">${ch.mentor.name}</div>
           <div class="dialog-speaker-role">${ch.mentor.role}</div>

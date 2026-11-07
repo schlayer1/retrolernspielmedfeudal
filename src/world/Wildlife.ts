@@ -28,23 +28,22 @@ interface BoundingBox {
   maxY: number;
 }
 
-// Map obstacles to prevent animals from walking through walls, into fires or water
+// Map obstacles to prevent animals from walking through building walls
 const BUILDING_OBSTACLES: BoundingBox[] = [
   // Bergfried & Palas
-  { minX: 14 * 16, maxX: 26 * 16, minY: 10 * 16, maxY: 20 * 16 },
+  { minX: 18 * 16, maxX: 26 * 16, minY: 12 * 16, maxY: 18 * 16 },
   // Burgtor
-  { minX: 24 * 16, maxX: 32 * 16, minY: 26 * 16, maxY: 33 * 16 },
-  // Kloster
-  { minX: 72 * 16, maxX: 92 * 16, minY: 10 * 16, maxY: 24 * 16 },
-  // Fronhof & Schmiede
-  { minX: 14 * 16, maxX: 38 * 16, minY: 48 * 16, maxY: 56 * 16 },
-  // Dorfgasthof & Hütten
-  { minX: 18 * 16, maxX: 38 * 16, minY: 64 * 16, maxY: 74 * 16 },
+  { minX: 24 * 16, maxX: 30 * 16, minY: 28 * 16, maxY: 32 * 16 },
+  // Klosterkirche
+  { minX: 78 * 16, maxX: 90 * 16, minY: 12 * 16, maxY: 22 * 16 },
+  // Meierhof Haupthaus
+  { minX: 20 * 16, maxX: 24 * 16, minY: 50 * 16, maxY: 54 * 16 },
+  // Schmiedehaus
+  { minX: 34 * 16, maxX: 38 * 16, minY: 50 * 16, maxY: 54 * 16 },
+  // Dorfgasthof
+  { minX: 20 * 16, maxX: 25 * 16, minY: 66 * 16, maxY: 70 * 16 },
   // Zehntscheune
-  { minX: 62 * 16, maxX: 72 * 16, minY: 46 * 16, maxY: 54 * 16 },
-  // Burgbach Flussbett (ohne Brücke)
-  { minX: 49 * 16, maxX: 55 * 16, minY: 0, maxY: 36 * 16 },
-  { minX: 49 * 16, maxX: 55 * 16, minY: 44 * 16, maxY: 80 * 16 },
+  { minX: 64 * 16, maxX: 70 * 16, minY: 48 * 16, maxY: 54 * 16 },
 ];
 
 export class WildlifeManager {
@@ -61,9 +60,9 @@ export class WildlifeManager {
     this.spawnAnimal(38 * 16, 20 * 16, 'horse', 20, 10, 0.95, 'horse');
 
     // 2. Zugochsen & Jungkälber auf der Fronhofsweide (Südwest)
-    this.spawnAnimal(22 * 16, 60 * 16, 'cow_brown', 24, 10, 1.0, 'cow');
-    this.spawnAnimal(26 * 16, 62 * 16, 'calf_brown', 18, 12, 0.85, 'calf');
-    this.spawnAnimal(28 * 16, 58 * 16, 'cow_brown', 22, 10, 1.0, 'cow');
+    this.spawnAnimal(26 * 16, 59 * 16, 'cow_brown', 24, 10, 1.0, 'cow');
+    this.spawnAnimal(29 * 16, 61 * 16, 'calf_brown', 18, 12, 0.85, 'calf');
+    this.spawnAnimal(24 * 16, 63 * 16, 'cow_brown', 22, 10, 1.0, 'cow');
 
     // 3. Schafe & Lämmer auf der Allmendeweide (Südost)
     this.spawnAnimal(74 * 16, 66 * 16, 'sheep', 20, 13, 0.95, 'sheep');
@@ -77,10 +76,10 @@ export class WildlifeManager {
     this.spawnAnimal(74 * 16, 58 * 16, 'piglet', 14, 14, 0.85, 'piglet');
     this.spawnAnimal(76 * 16, 54 * 16, 'pig', 18, 11, 0.95, 'pig');
 
-    // 5. Hofhühner & Küken beim Meierhof
-    this.spawnAnimal(16 * 16, 56 * 16, 'chicken_brown', 14, 15, 0.9, 'chicken');
-    this.spawnAnimal(19 * 16, 58 * 16, 'chick_dark', 10, 16, 0.8, 'chick');
-    this.spawnAnimal(15 * 16, 58 * 16, 'chicken_brown', 12, 14, 0.9, 'chicken');
+    // 5. Hofhühner & Küken beim Meierhof (direkt neben dem Spieler)
+    this.spawnAnimal(19 * 16, 56 * 16, 'chicken_brown', 14, 15, 0.9, 'chicken');
+    this.spawnAnimal(20 * 16, 58 * 16, 'chick_dark', 10, 16, 0.8, 'chick');
+    this.spawnAnimal(18 * 16, 59 * 16, 'chicken_brown', 12, 14, 0.9, 'chicken');
 
     // 6. Enten auf dem Burgbach (Wasser)
     this.spawnDuck(52 * 16, 22 * 16, 20);

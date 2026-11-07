@@ -44,7 +44,8 @@ export class WorldScene extends Phaser.Scene {
   private spaceKey?: Phaser.Input.Keyboard.Key;
   private enterKey?: Phaser.Input.Keyboard.Key;
 
-  private mentorSprite: Phaser.GameObjects.Sprite | null = null;
+  private mentorSprites = new Map<string, Phaser.GameObjects.Sprite>();
+  private mentorNameplates = new Map<string, HTMLDivElement>();
   private targets: InteractiveTarget[] = [];
   private activeTarget: InteractiveTarget | null = null;
   private labelDiv: HTMLElement | null = null;
@@ -93,8 +94,8 @@ export class WorldScene extends Phaser.Scene {
     // 4. Living River Shores & Water Infrastructure
     this.buildRiverShores();
 
-    // 5. Border Trees & Streuobstwiese
-    this.placeBorderTrees();
+    // 5. Overworld Trees, Fruit Orchards & Nature (120+ Curated Elements)
+    this.placeOverworldTreesAndNature();
 
     // 6. Setup Controls
     if (this.input.keyboard) {
@@ -473,7 +474,7 @@ export class WorldScene extends Phaser.Scene {
   private scatterGroundFlora(): void {
     const W = this.mapW * 16;
     const H = this.mapH * 16;
-    const rng = new Phaser.Math.RandomDataGenerator(['medieval-feudal-flora-v2']);
+    const rng = new Phaser.Math.RandomDataGenerator(['medieval-feudal-flora-v3']);
 
     const meadowPool = [
       'grass_s1',
@@ -486,6 +487,7 @@ export class WorldScene extends Phaser.Scene {
       'flower_bunch_b',
       'flower_bunch_c',
       'flower_purple',
+      'flower_purple_b',
       'flower_white',
       'flower_pink',
       'flower_blue_a',
@@ -495,13 +497,13 @@ export class WorldScene extends Phaser.Scene {
       'fern_2',
     ];
 
-    const roadPool = ['pebbles_a', 'pebbles_b', 'pebbles_c', 'rock_small_a'];
+    const roadPool = ['pebbles_a', 'pebbles_b', 'pebbles_c', 'rock_small_a', 'rock_small_b'];
     const forestPool = ['mushroom_small', 'mushroom_b', 'mushroom_red', 'fern_1', 'fern_2', 'fern_3', 'grass_s1'];
 
     const atlas = this.textures.get('world_atlas');
     if (!atlas) return;
 
-    for (let i = 0; i < 150; i++) {
+    for (let i = 0; i < 280; i++) {
       const x = rng.between(28, W - 28);
       const y = rng.between(32, H - 28);
 
@@ -517,41 +519,183 @@ export class WorldScene extends Phaser.Scene {
         : rng.pick(meadowPool);
 
       if (atlas.has(frame)) {
-        const sc = onRoad ? 0.75 : rng.realInRange(0.75, 0.9);
-        this.add.image(x, y, 'world_atlas', frame).setScale(sc).setDepth(1.2);
+        const sc = onRoad ? 0.65 : rng.realInRange(0.42, 0.58);
+        const spr = this.add.image(x, y, 'world_atlas', frame).setScale(sc).setDepth(y - 2);
+        if (!onRoad) {
+          this.livingWorldManager.registerFlora(spr);
+        }
       }
     }
   }
 
-  private placeBorderTrees(): void {
-    const curatedTrees: Array<[string, number, number]> = [
-      ['tree_pine_1', 14 * 16, 8 * 16],
-      ['tree_pine_2', 22 * 16, 7 * 16],
-      ['tree_oak_1', 32 * 16, 8 * 16],
-      ['tree_oak_2', 10 * 16, 18 * 16],
-      ['tree_oak_1', 68 * 16, 8 * 16],
-      ['tree_oak_2', 76 * 16, 7 * 16],
-      ['tree_oak_3', 88 * 16, 8 * 16],
-      ['tree_fir_1', 94 * 16, 16 * 16],
-      ['tree_apple', 42 * 16, 38 * 16],
-      ['tree_apple', 46 * 16, 34 * 16],
-      ['tree_willow', 47 * 16, 72 * 16],
-      ['tree_willow', 58 * 16, 74 * 16],
-      ['tree_oak_2', 64 * 16, 74 * 16],
-      ['tree_oak_1', 78 * 16, 76 * 16],
-      ['tree_pine_1', 92 * 16, 72 * 16],
+  public placeOverworldTreesAndNature(): void {
+    const getNatureScale = (frame: string): number => {
+      if (frame.startsWith('bush_big') || frame.startsWith('bush_huge')) return 0.52;
+      if (frame.startsWith('bush_tall')) return 0.58;
+      if (frame.startsWith('bush_')) return 0.65;
+      if (frame.startsWith('pebbles') || frame.startsWith('rock_small') || frame.startsWith('rock_flat')) return 0.55;
+      if (frame.startsWith('rock_tall') || frame.startsWith('rock_')) return 0.60;
+      if (frame.startsWith('stump_')) return 0.58;
+      if (frame.startsWith('logs_')) return 0.56;
+      if (frame.startsWith('fern_big')) return 0.40;
+      if (frame.startsWith('fern_')) return 0.35;
+      if (frame.startsWith('tree_oak_tall') || frame.startsWith('tree_pine_tall')) return 0.90;
+      if (frame.startsWith('tree_pine_slim') || frame.startsWith('tree_small')) return 0.85;
+      return 1.0;
+    };
+
+    interface NatureItem {
+      x: number;
+      y: number;
+      frame: string;
+      scale?: number;
+      isFlora?: boolean;
+    }
+
+    const natureItems: NatureItem[] = [
+      // -----------------------------------------------------------------------
+      // 1. DORFKERN, FRONHOF & ACKERFLUREN (Südwest: x 8..46, y 46..76)
+      // -----------------------------------------------------------------------
+      { x: 14, y: 50, frame: 'tree_apple', isFlora: true },
+      { x: 18, y: 48, frame: 'tree_pear', isFlora: true },
+      { x: 28, y: 50, frame: 'tree_apple', isFlora: true },
+      { x: 32, y: 48, frame: 'tree_oak_2', isFlora: true },
+      { x: 12, y: 58, frame: 'tree_oak_1', isFlora: true },
+      { x: 14, y: 64, frame: 'tree_apple', isFlora: true },
+      { x: 26, y: 66, frame: 'tree_oak_3', isFlora: true },
+      { x: 34, y: 64, frame: 'tree_small_1', isFlora: true },
+      { x: 40, y: 62, frame: 'tree_pear', isFlora: true },
+      { x: 44, y: 50, frame: 'tree_small_2', isFlora: true },
+      { x: 20, y: 68, frame: 'tree_apple', isFlora: true },
+      { x: 30, y: 72, frame: 'tree_oak_2', isFlora: true },
+      { x: 38, y: 74, frame: 'tree_pear', isFlora: true },
+      { x: 16, y: 52, frame: 'bush_berry_red', isFlora: true },
+      { x: 20, y: 52, frame: 'bush_berry_blue', isFlora: true },
+      { x: 28, y: 54, frame: 'bush_flower_a', isFlora: true },
+      { x: 16, y: 62, frame: 'bush_berry_orange', isFlora: true },
+      { x: 22, y: 64, frame: 'bush_berry_red2', isFlora: true },
+      { x: 32, y: 60, frame: 'stump_axe' },
+      { x: 36, y: 58, frame: 'logs_a' },
+      { x: 24, y: 62, frame: 'rock_moss_b' },
+      { x: 38, y: 68, frame: 'stump_a' },
+      { x: 42, y: 66, frame: 'bush_big_green', isFlora: true },
+      { x: 12, y: 70, frame: 'rock_cluster' },
+      { x: 16, y: 74, frame: 'logs_b' },
+      { x: 44, y: 72, frame: 'bush_big_berry', isFlora: true },
+
+      // -----------------------------------------------------------------------
+      // 2. HÖHENBURG STEINFELS & BERGKAMM (Nordwest: x 8..44, y 8..38)
+      // -----------------------------------------------------------------------
+      { x: 8, y: 10, frame: 'tree_pine_tall', scale: 0.9, isFlora: true },
+      { x: 12, y: 8, frame: 'tree_pine_1', isFlora: true },
+      { x: 16, y: 8, frame: 'tree_pine_2', isFlora: true },
+      { x: 24, y: 8, frame: 'tree_fir_1', isFlora: true },
+      { x: 32, y: 8, frame: 'tree_pine_3', isFlora: true },
+      { x: 38, y: 8, frame: 'tree_pine_tall', scale: 0.9, isFlora: true },
+      { x: 44, y: 8, frame: 'tree_fir_2', isFlora: true },
+      { x: 8, y: 16, frame: 'tree_pine_4', isFlora: true },
+      { x: 8, y: 24, frame: 'tree_pine_5', isFlora: true },
+      { x: 8, y: 32, frame: 'tree_fir_3', isFlora: true },
+      { x: 14, y: 36, frame: 'tree_pine_slim', isFlora: true },
+      { x: 34, y: 34, frame: 'tree_oak_tall', scale: 0.9, isFlora: true },
+      { x: 42, y: 32, frame: 'tree_pine_1', isFlora: true },
+      { x: 44, y: 22, frame: 'tree_pine_2', isFlora: true },
+      { x: 10, y: 14, frame: 'rock_big_a', scale: 0.9 },
+      { x: 10, y: 22, frame: 'rock_tall_a' },
+      { x: 12, y: 30, frame: 'rock_cluster' },
+      { x: 32, y: 14, frame: 'rock_moss_a' },
+      { x: 36, y: 26, frame: 'rock_big_b' },
+      { x: 42, y: 24, frame: 'bush_tall_a', isFlora: true },
+      { x: 14, y: 26, frame: 'bush_berry_red2', isFlora: true },
+      { x: 30, y: 36, frame: 'rock_moss_c' },
+
+      // -----------------------------------------------------------------------
+      // 3. KLOSTER ST. BENEDIKT & SKRIPTORIUM (Nordost: x 56..94, y 8..38)
+      // -----------------------------------------------------------------------
+      { x: 58, y: 8, frame: 'tree_autumn_1', isFlora: true },
+      { x: 64, y: 8, frame: 'tree_autumn_2', isFlora: true },
+      { x: 72, y: 8, frame: 'tree_oak_tall', scale: 0.9, isFlora: true },
+      { x: 80, y: 8, frame: 'tree_oak_1', isFlora: true },
+      { x: 88, y: 8, frame: 'tree_oak_2', isFlora: true },
+      { x: 94, y: 8, frame: 'tree_oak_3', isFlora: true },
+      { x: 94, y: 16, frame: 'tree_pine_1', isFlora: true },
+      { x: 94, y: 24, frame: 'tree_oak_tall', scale: 0.9, isFlora: true },
+      { x: 94, y: 32, frame: 'tree_autumn_1', isFlora: true },
+      { x: 60, y: 14, frame: 'tree_small_3', isFlora: true },
+      { x: 68, y: 12, frame: 'tree_apple', isFlora: true },
+      { x: 78, y: 14, frame: 'tree_pear', isFlora: true },
+      { x: 88, y: 26, frame: 'tree_willow', isFlora: true },
+      { x: 70, y: 18, frame: 'bush_big_flower', isFlora: true },
+      { x: 76, y: 22, frame: 'bush_big_pink', isFlora: true },
+      { x: 80, y: 24, frame: 'bush_berry_blue', isFlora: true },
+      { x: 90, y: 20, frame: 'rock_flat' },
+      { x: 66, y: 28, frame: 'rock_moss_d' },
+      { x: 62, y: 22, frame: 'bush_flower_a', isFlora: true },
+      { x: 84, y: 30, frame: 'bush_big_green', isFlora: true },
+
+      // -----------------------------------------------------------------------
+      // 4. BURGBACH FLUSSUFER (Zentral: x 46..55, y 10..78)
+      // -----------------------------------------------------------------------
+      { x: 46, y: 12, frame: 'tree_willow', isFlora: true },
+      { x: 55, y: 14, frame: 'tree_willow', isFlora: true },
+      { x: 46, y: 24, frame: 'tree_willow', isFlora: true },
+      { x: 55, y: 28, frame: 'tree_willow', isFlora: true },
+      { x: 46, y: 38, frame: 'tree_willow', isFlora: true },
+      { x: 55, y: 44, frame: 'tree_willow', isFlora: true },
+      { x: 46, y: 52, frame: 'tree_willow', isFlora: true },
+      { x: 55, y: 58, frame: 'tree_willow', isFlora: true },
+      { x: 46, y: 66, frame: 'tree_willow', isFlora: true },
+      { x: 55, y: 72, frame: 'tree_willow', isFlora: true },
+      { x: 46, y: 76, frame: 'tree_willow', isFlora: true },
+      { x: 47, y: 18, frame: 'rock_moss_d' },
+      { x: 54, y: 22, frame: 'pebbles_a' },
+      { x: 47, y: 34, frame: 'pebbles_b' },
+      { x: 54, y: 48, frame: 'rock_moss_e' },
+      { x: 47, y: 60, frame: 'pebbles_c' },
+      { x: 54, y: 64, frame: 'pebbles_a' },
+      { x: 47, y: 72, frame: 'rock_moss_f' },
+
+      // -----------------------------------------------------------------------
+      // 5. MARKTPLATZ, TURNIERWIESE & DORFLINDE (Südost: x 58..94, y 46..78)
+      // -----------------------------------------------------------------------
+      { x: 58, y: 48, frame: 'tree_oak_1', isFlora: true },
+      { x: 62, y: 44, frame: 'tree_oak_2', isFlora: true },
+      { x: 80, y: 44, frame: 'tree_oak_3', isFlora: true },
+      { x: 88, y: 44, frame: 'tree_oak_tall', scale: 0.9, isFlora: true },
+      { x: 94, y: 46, frame: 'tree_pine_tall', scale: 0.9, isFlora: true },
+      { x: 94, y: 54, frame: 'tree_pine_2', isFlora: true },
+      { x: 94, y: 62, frame: 'tree_fir_1', isFlora: true },
+      { x: 94, y: 70, frame: 'tree_pine_3', isFlora: true },
+      { x: 94, y: 76, frame: 'tree_pine_4', isFlora: true },
+      { x: 88, y: 76, frame: 'tree_oak_1', isFlora: true },
+      { x: 80, y: 76, frame: 'tree_oak_2', isFlora: true },
+      { x: 72, y: 76, frame: 'tree_oak_3', isFlora: true },
+      { x: 62, y: 76, frame: 'tree_autumn_2', isFlora: true },
+      { x: 58, y: 74, frame: 'tree_small_4', isFlora: true },
+      { x: 64, y: 52, frame: 'bush_big_berry', isFlora: true },
+      { x: 76, y: 50, frame: 'bush_big_green', isFlora: true },
+      { x: 86, y: 54, frame: 'stump_axe' },
+      { x: 70, y: 72, frame: 'logs_b' },
+      { x: 84, y: 72, frame: 'rock_moss_g' },
+      { x: 66, y: 68, frame: 'bush_tall_b', isFlora: true },
+      { x: 78, y: 64, frame: 'bush_flower_a', isFlora: true },
     ];
 
     const atlas = this.textures.get('world_atlas');
     if (!atlas) return;
 
-    for (const [key, x, y] of curatedTrees) {
-      if (atlas.has(key)) {
-        const spr = this.add.image(x, y, 'world_atlas', key);
+    for (const item of natureItems) {
+      if (atlas.has(item.frame)) {
+        const px = item.x * 16;
+        const py = item.y * 16;
+        const scale = item.scale ?? getNatureScale(item.frame);
+        const spr = this.add.image(px, py, 'world_atlas', item.frame);
         spr.setOrigin(0.5, 0.9);
-        spr.setScale(0.9);
-        spr.setDepth(y);
-        this.livingWorldManager.registerFlora(spr);
+        spr.setScale(scale);
+        spr.setDepth(py);
+        if (item.isFlora) {
+          this.livingWorldManager.registerFlora(spr);
+        }
       }
     }
   }
@@ -737,8 +881,8 @@ export class WorldScene extends Phaser.Scene {
       });
     }
 
-    // Spawn aktiven Mentor-Sprite für aktuelles Kapitel
-    this.updateActiveMentorSprite();
+    // Spawn alle 8 Mentoren dauerhaft auf der Karte
+    this.spawnAllMentors();
 
     // 2. Relikte auf der Karte (mit echtem Relikt-Sprite + Leucht-Marker, jederzeit auswählbar!)
     for (const rel of MEDIEVAL_RELICS) {
@@ -1014,28 +1158,52 @@ export class WorldScene extends Phaser.Scene {
     }
   }
 
-  private updateActiveMentorSprite(): void {
-    if (this.mentorSprite) {
-      this.mentorSprite.destroy();
-      this.mentorSprite = null;
+  private spawnAllMentors(): void {
+    this.mentorSprites.forEach((s) => s.destroy());
+    this.mentorSprites.clear();
+    this.mentorNameplates.forEach((el) => el.remove());
+    this.mentorNameplates.clear();
+
+    let nameplateContainer = document.getElementById('nameplates-container');
+    if (!nameplateContainer) {
+      nameplateContainer = document.createElement('div');
+      nameplateContainer.id = 'nameplates-container';
+      nameplateContainer.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:15;overflow:hidden;';
+      document.body.appendChild(nameplateContainer);
     }
 
-    const curCh = MEDIEVAL_CHAPTERS.find((c) => c.id === gameState.chapter);
-    if (!curCh) return;
+    for (const ch of MEDIEVAL_CHAPTERS) {
+      const m = ch.mentor;
+      const texKey = m.npcKey || `npc_${m.portraitKey || 'meier'}`;
+      if (this.textures.exists(texKey)) {
+        const spr = this.add.sprite(m.x, m.y, texKey, 0);
+        spr.setOrigin(0.5, 0.9);
+        spr.setScale(1.0); // 16x32 native Steinzeit benchmark
+        spr.setDepth(m.y);
+        spr.setInteractive({ useHandCursor: true });
+        spr.on('pointerdown', () => {
+          this.activeTarget = this.targets.find((t) => t.id === `mentor_${m.id}`) || null;
+          this.triggerInteraction();
+        });
 
-    const mentor = curCh.mentor;
-    const spriteKey = mentor.avatar.split('/').pop()?.replace('.png', '') || 'keep_peasant_m';
+        if (this.anims.exists(`${texKey}-idle-down`)) {
+          spr.play(`${texKey}-idle-down`, true);
+        }
 
-    if (this.textures.exists(spriteKey)) {
-      this.mentorSprite = this.add.sprite(mentor.x, mentor.y, spriteKey, 0);
-      this.mentorSprite.setOrigin(0.5, 0.9);
-      this.mentorSprite.setScale(0.8);
-      this.mentorSprite.setDepth(mentor.y);
-      this.mentorSprite.setInteractive({ useHandCursor: true });
-      this.mentorSprite.on('pointerdown', () => this.triggerInteraction());
+        this.mentorSprites.set(m.id, spr);
 
-      if (this.anims.exists(`${spriteKey}-idle-down`)) {
-        this.mentorSprite.play(`${spriteKey}-idle-down`);
+        // Nameplate HTML
+        const plate = document.createElement('div');
+        plate.className = 'mentor-nameplate';
+        plate.style.cssText = `
+          position:absolute;transform:translate(-50%, -100%);pointer-events:none;
+          background:rgba(20,12,7,0.88);border:1.5px solid #d97706;border-radius:4px;
+          padding:2px 6px;color:#fef08a;font-family:system-ui,sans-serif;font-size:10px;
+          font-weight:700;text-align:center;box-shadow:0 2px 5px rgba(0,0,0,0.7);white-space:nowrap;
+        `;
+        plate.innerHTML = `<span style="color:#fbbf24;">${m.name}</span><br><span style="font-size:8.5px;color:#fde68a;font-weight:500;">${m.role}</span>`;
+        nameplateContainer.appendChild(plate);
+        this.mentorNameplates.set(m.id, plate);
       }
     }
   }
@@ -1075,7 +1243,6 @@ export class WorldScene extends Phaser.Scene {
           subtitle: `${curCh.eraName} · ${curCh.sub}`,
         });
       }
-      this.updateActiveMentorSprite();
       sound.startBGM(gameState.chapter);
     }
   }
@@ -1104,6 +1271,8 @@ export class WorldScene extends Phaser.Scene {
   }
 
   public enterInterior(roomId: string, returnX?: number, returnY?: number): void {
+    if (this.labelDiv) this.labelDiv.style.display = 'none';
+    this.mentorNameplates.forEach((p) => (p.style.display = 'none'));
     this.scene.pause('WorldScene');
     this.scene.launch('InteriorScene', {
       roomId,
@@ -1214,7 +1383,7 @@ export class WorldScene extends Phaser.Scene {
           this.player.play(aKey, true);
         } else {
           this.facing = 'left';
-          this.player.setFlipX(true);
+          this.player.setFlipX(false);
           const aKey = this.anims.exists(`walk-${g}-left`) ? `walk-${g}-left` : 'walk-left';
           this.player.play(aKey, true);
         }
@@ -1240,6 +1409,7 @@ export class WorldScene extends Phaser.Scene {
         gameState.walkedDistanceMeters += 1;
       }
     } else {
+      this.player.setFlipX(false);
       const g = gameState.gender;
       const idleKey = `idle-${g}-${this.facing}`;
       if (this.anims.exists(idleKey)) {
@@ -1249,7 +1419,8 @@ export class WorldScene extends Phaser.Scene {
         if (this.facing === 'down') this.player.setFrame(0);
         else if (this.facing === 'right') this.player.setFrame(17);
         else if (this.facing === 'up') this.player.setFrame(34);
-        else this.player.setFrame(17);
+        else if (this.facing === 'left') this.player.setFrame(51);
+        else this.player.setFrame(0);
       }
     }
 
@@ -1266,6 +1437,7 @@ export class WorldScene extends Phaser.Scene {
 
     // 3. Proximity Target & Quest Compass
     this.updateActiveTargetAndCompass();
+    this.updateMentorNameplates();
 
     // 4. Handle Touch Action Button (Keyboard [E]/[Space]/[Enter] is handled cleanly by UIScene)
     if (touch && touch.actionPressed) {
@@ -1511,6 +1683,34 @@ export class WorldScene extends Phaser.Scene {
     }
   }
 
+  private updateMentorNameplates(): void {
+    const cam = this.cameras.main;
+    const rect = this.game.canvas.getBoundingClientRect();
+    const vw = cam.worldView.width;
+    const vh = cam.worldView.height;
+    if (!vw || !vh || !rect.width) return;
+
+    for (const [id, spr] of this.mentorSprites) {
+      const plate = this.mentorNameplates.get(id);
+      if (plate) {
+        if (
+          spr.x >= cam.worldView.x - 32 &&
+          spr.x <= cam.worldView.x + vw + 32 &&
+          spr.y >= cam.worldView.y - 32 &&
+          spr.y <= cam.worldView.y + vh + 32
+        ) {
+          const sx = rect.left + ((spr.x - cam.worldView.x) / vw) * rect.width;
+          const sy = rect.top + ((spr.y - 28 - cam.worldView.y) / vh) * rect.height;
+          plate.style.display = 'block';
+          plate.style.left = `${sx}px`;
+          plate.style.top = `${sy}px`;
+        } else {
+          plate.style.display = 'none';
+        }
+      }
+    }
+  }
+
   public triggerInteraction(): void {
     if (!this.activeTarget) return;
 
@@ -1557,12 +1757,15 @@ export class WorldScene extends Phaser.Scene {
 
     // 2. Mentor -> Dialog öffnen
     if (this.activeTarget.kind === 'mentor') {
-      const curCh = MEDIEVAL_CHAPTERS.find((c) => c.id === gameState.chapter);
-      if (curCh) {
+      const targetMentorId = this.activeTarget.id.replace('mentor_', '');
+      const mentorCh =
+        MEDIEVAL_CHAPTERS.find((c) => c.mentor.id === targetMentorId) ||
+        MEDIEVAL_CHAPTERS.find((c) => c.id === gameState.chapter);
+      if (mentorCh) {
         this.focusOnDialog(this.activeTarget.x, this.activeTarget.y);
         const win = window as any;
         if (win.__openMentorDialog) {
-          win.__openMentorDialog(curCh);
+          win.__openMentorDialog(mentorCh);
         }
       }
       return;

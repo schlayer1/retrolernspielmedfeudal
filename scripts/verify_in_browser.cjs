@@ -5,7 +5,7 @@ const fs = require('fs');
 
 const CHROME_PATH = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const ARTIFACT_DIR = path.resolve(__dirname, '..', 'artifacts');
-const CONV_DIR = '/Users/nicolekeller/.gemini/antigravity/brain/f95fdc3f-3064-43f6-8d47-4f5743487b64';
+const CONV_DIR = '/Users/nicolekeller/.gemini/antigravity/brain/542f4dee-9fc3-49c1-acc1-35bdcda5b5b1';
 const PORT = 4186;
 
 if (!fs.existsSync(ARTIFACT_DIR)) {

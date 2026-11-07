@@ -50,6 +50,10 @@ export class InteriorScene extends Phaser.Scene {
   private stepCooldown = 0;
   private domOverlay?: HTMLDivElement;
 
+  private facing: 'down' | 'up' | 'left' | 'right' = 'down';
+  private mentorSprite: Phaser.GameObjects.Sprite | null = null;
+  private animProps: Phaser.GameObjects.Sprite[] = [];
+
   constructor() {
     super({ key: 'InteriorScene' });
   }
@@ -65,18 +69,19 @@ export class InteriorScene extends Phaser.Scene {
       returnY: data?.returnY ?? 32 * 16,
     };
     this.hotspots = [];
+    this.animProps = [];
     this.isExiting = false;
   }
 
   public create(): void {
-    const ROOM_W = 352;
-    const ROOM_H = 208;
+    const ROOM_W = 384;
+    const ROOM_H = 224;
     const CX = 240;
-    const CY = 140;
+    const CY = 135;
     const LEFT = CX - ROOM_W / 2;
     const TOP = CY - ROOM_H / 2;
 
-    this.cameras.main.setBackgroundColor('#100b07');
+    this.cameras.main.setBackgroundColor('#0d0805');
 
     document.getElementById('interior-dom-overlay')?.remove();
     const overlay = document.createElement('div');
@@ -108,7 +113,7 @@ export class InteriorScene extends Phaser.Scene {
     };
 
     // Header Tag
-    addDomTag(240, 18, `🏛️ ${this.initData.title}`, 'rgba(20,12,6,0.95)', '#f59e0b', '#fff');
+    addDomTag(240, 16, `🏛️ ${this.initData.title}`, 'rgba(20,12,6,0.95)', '#f59e0b', '#fff');
 
     // Controls
     if (this.input.keyboard) {
@@ -123,52 +128,71 @@ export class InteriorScene extends Phaser.Scene {
       };
     }
 
-    // Floor rendering
-    const g = this.add.graphics();
-    g.fillStyle(0x1a120b, 1.0);
-    g.fillRect(LEFT - 12, TOP - 12, ROOM_W + 24, ROOM_H + 24);
-
-    // Stone or wooden floor planks
-    const isStone = this.initData.roomId === 'burgsaal_palas' || this.initData.roomId === 'klosterapotheke_skriptorium';
-    g.fillStyle(isStone ? 0x3d352e : 0x4a2e18, 1.0);
-    g.fillRect(LEFT, TOP, ROOM_W, ROOM_H);
-
-    // Tile pattern
-    g.lineStyle(1, isStone ? 0x27221d : 0x341d0e, 0.7);
-    for (let x = LEFT; x <= LEFT + ROOM_W; x += 16) {
-      g.lineBetween(x, TOP, x, TOP + ROOM_H);
-    }
-    for (let y = TOP; y <= TOP + ROOM_H; y += 16) {
-      g.lineBetween(LEFT, y, LEFT + ROOM_W, y);
+    // 1. Authentic 16-bit SNES Room Background
+    const bgTex = this.getRoomBackgroundTexture(this.initData.roomId);
+    if (this.textures.exists(bgTex)) {
+      const bgImg = this.add.image(CX, CY, bgTex);
+      bgImg.setOrigin(0.5, 0.5);
+      bgImg.setDisplaySize(ROOM_W, ROOM_H);
+      bgImg.setDepth(1);
+    } else {
+      // Fallback wooden floor
+      const g = this.add.graphics();
+      g.fillStyle(0x3a2416, 1.0);
+      g.fillRect(LEFT, TOP, ROOM_W, ROOM_H);
     }
 
-    // Walls
-    g.fillStyle(0x1c140d, 1.0);
-    g.fillRect(LEFT, TOP, ROOM_W, 24);
-    g.lineStyle(2, 0xd4af37, 0.85);
-    g.strokeRect(LEFT, TOP, ROOM_W, ROOM_H);
+    // Wall & border shadow
+    const shadowG = this.add.graphics();
+    shadowG.lineStyle(2, 0xd4af37, 0.85);
+    shadowG.strokeRect(LEFT, TOP, ROOM_W, ROOM_H);
+    shadowG.setDepth(30);
 
     // Exit mat at bottom
     this.exitMat = { x: CX, y: TOP + ROOM_H - 12, w: 48, h: 20 };
-    g.fillStyle(0x854d0e, 0.9);
-    g.fillRect(this.exitMat.x - 24, this.exitMat.y - 10, 48, 20);
+    const exitG = this.add.graphics();
+    exitG.fillStyle(0x991b1b, 0.9);
+    exitG.fillRect(this.exitMat.x - 24, this.exitMat.y - 10, 48, 20);
+    exitG.lineStyle(1.5, 0xfbbf24, 1.0);
+    exitG.strokeRect(this.exitMat.x - 24, this.exitMat.y - 10, 48, 20);
+    exitG.setDepth(5);
     addDomTag(this.exitMat.x, this.exitMat.y, '🚪 Auszug [E / S]', 'rgba(28,18,10,0.92)', '#f59e0b', '#fde68a');
 
-    // Build specific room props
+    // Build specific room props & animated fires/torches
     this.buildRoom(this.initData.roomId || 'burgsaal_palas', LEFT, TOP, ROOM_W, ROOM_H, addDomTag);
 
-    // Spawn Player
-    this.player = this.physics.add.sprite(CX, TOP + ROOM_H - 36, 'character', 0);
+    // Spawn Player (16x32 Steinzeit Benchmark)
+    const charKey =
+      gameState.gender === 'female' && this.textures.exists('character_female')
+        ? 'character_female'
+        : 'character';
+    this.player = this.physics.add.sprite(CX, TOP + ROOM_H - 36, charKey, 0);
     this.player.setOrigin(0.5, 0.9);
     this.player.setScale(1.0);
+    this.player.setDepth(20);
     this.player.setCollideWorldBounds(true);
-    this.physics.world.setBounds(LEFT + 8, TOP + 26, ROOM_W - 16, ROOM_H - 32);
+    this.physics.world.setBounds(LEFT + 12, TOP + 32, ROOM_W - 24, ROOM_H - 42);
 
     this.cameras.main.setBounds(0, 0, 480, 270);
     this.cameras.main.centerOn(240, 135);
     this.cameras.main.setZoom(1.0);
 
     sound.door?.();
+  }
+
+  private getRoomBackgroundTexture(id?: InteriorRoomId): string {
+    switch (id) {
+      case 'burgsaal_palas':
+        return 'interior_tavern_day';
+      case 'klosterapotheke_skriptorium':
+        return 'interior_alchemist_day';
+      case 'dorfschmiede_hufeisen':
+        return 'interior_store_smithy_day';
+      case 'zunftstube_rathaus':
+        return 'interior_guild_library_day';
+      default:
+        return 'interior_tavern_day';
+    }
   }
 
   private buildRoom(
@@ -182,7 +206,17 @@ export class InteriorScene extends Phaser.Scene {
     const cx = left + w / 2;
 
     if (roomId === 'burgsaal_palas') {
-      // 1. Thron des Grafen Eberhard
+      // 1. Mentor: Graf Eberhard im Palas
+      this.spawnInteriorMentor(cx + 40, top + 64, 'npc_eberhard', 'npc_eberhard-idle-down');
+
+      // 2. Kaminfeuer animiert
+      this.spawnAnimatedProp(left + 54, top + 52, 'interior-hearth-fire', 12, 1.0);
+
+      // 3. Fackeln an den Wänden
+      this.spawnAnimatedProp(left + 28, top + 36, 'interior-wall-torch', 12, 1.0);
+      this.spawnAnimatedProp(left + w - 28, top + 36, 'interior-wall-torch', 12, 1.0);
+
+      // Thron des Grafen Eberhard
       addDomTag(cx, top + 42, '👑 Grafenthron & Kamin', 'rgba(45,20,10,0.95)', '#f59e0b', '#fef08a');
       this.hotspots.push({
         id: 'hs_thron',
@@ -193,8 +227,8 @@ export class InteriorScene extends Phaser.Scene {
         text: 'Von diesem Thron aus leite ich die Lehnsgerichte. Das Lehnswesen bindet Fürst und Vasall durch ewigen Treueid!',
       });
 
-      // 2. Kaminfeuer
-      const kaminX = left + 50;
+      // Kaminfeuer
+      const kaminX = left + 54;
       addDomTag(kaminX, top + 44, '🔥 Palas-Kamin', 'rgba(40,15,5,0.92)', '#ea580c', '#fdba74');
       this.hotspots.push({
         id: 'hs_kamin',
@@ -205,7 +239,7 @@ export class InteriorScene extends Phaser.Scene {
         text: 'Der Palas war das einzige dauerhaft beheizte Wohngebäude der Burg – der Sitz des Grafen und seiner Familie.',
       });
 
-      // 3. Rüstungsständer
+      // Rüstungsständer
       const ruestX = left + w - 50;
       addDomTag(ruestX, top + 44, '🛡️ Ritterrüstung', 'rgba(25,25,35,0.92)', '#94a3b8', '#f8fafc');
       this.hotspots.push({
@@ -222,7 +256,7 @@ export class InteriorScene extends Phaser.Scene {
         },
       });
 
-      // 4. Prunktafel
+      // Prunktafel
       addDomTag(cx, top + 110, '🍷 Rittersaal-Tafel', 'rgba(30,18,10,0.9)', '#d4af37', '#fef3c7');
       this.hotspots.push({
         id: 'hs_tafel',
@@ -233,7 +267,14 @@ export class InteriorScene extends Phaser.Scene {
         text: 'Nach der Jagd und auf Turnieren speisen hier die Vasallen. Minnesänger tragen ihre Lieder vor.',
       });
     } else if (roomId === 'klosterapotheke_skriptorium') {
-      // 1. Skriptorium-Pult
+      // 1. Mentor: Bruder Anselm
+      this.spawnInteriorMentor(cx + 40, top + 64, 'npc_anselm', 'npc_anselm-idle-down');
+
+      // 2. Fackeln & Licht
+      this.spawnAnimatedProp(left + 28, top + 36, 'interior-wall-torch', 12, 1.0);
+      this.spawnAnimatedProp(left + w - 28, top + 36, 'interior-wall-torch', 12, 1.0);
+
+      // Skriptorium-Pult
       addDomTag(cx, top + 42, '📜 Skriptorium & Kodizes', 'rgba(20,25,35,0.95)', '#38bdf8', '#e0f2fe');
       this.hotspots.push({
         id: 'hs_skriptorium',
@@ -249,7 +290,7 @@ export class InteriorScene extends Phaser.Scene {
         },
       });
 
-      // 2. Kräutermörser
+      // Kräutermörser
       const krautX = left + 60;
       addDomTag(krautX, top + 50, '🌿 Arznei-Mörser', 'rgba(15,35,20,0.92)', '#10b981', '#a7f3d0');
       this.hotspots.push({
@@ -266,7 +307,7 @@ export class InteriorScene extends Phaser.Scene {
         },
       });
 
-      // 3. Bibliotheksregal
+      // Bibliotheksregal
       const bibX = left + w - 60;
       addDomTag(bibX, top + 50, '📚 Klosterbibliothek', 'rgba(35,25,15,0.92)', '#d97706', '#fde68a');
       this.hotspots.push({
@@ -278,7 +319,13 @@ export class InteriorScene extends Phaser.Scene {
         text: '"Ein Kloster ohne Bibliothek ist wie eine Festung ohne Rüstkammer." Wir hüten das Wissen des Abendlandes.',
       });
     } else if (roomId === 'dorfschmiede_hufeisen') {
-      // 1. Esse & Rennofen
+      // 1. Mentor: Baumeister Arnold / Dorfschmied
+      this.spawnInteriorMentor(cx + 40, top + 64, 'npc_arnold', 'npc_arnold-idle-down');
+
+      // 2. Schmiedeesse Esse / Rennofen animiert
+      this.spawnAnimatedProp(left + 60, top + 54, 'interior-forge-fire', 12, 1.0);
+
+      // Esse & Rennofen
       addDomTag(cx, top + 42, '🔥 Rennofen & Schmiedeesse', 'rgba(45,15,5,0.95)', '#ea580c', '#fed7aa');
       this.hotspots.push({
         id: 'hs_esse',
@@ -289,7 +336,7 @@ export class InteriorScene extends Phaser.Scene {
         text: 'Im Holzkohlenfeuer glüht das Eisen bei über 1.000 Grad! Hier schmiede ich Pflugmesser, Äxte und Hufeisen.',
       });
 
-      // 2. Amboss
+      // Amboss
       const ambossX = left + 65;
       addDomTag(ambossX, top + 85, '⚒️ Meisteramboss', 'rgba(30,30,35,0.92)', '#94a3b8', '#f1f5f9');
       this.hotspots.push({
@@ -301,7 +348,7 @@ export class InteriorScene extends Phaser.Scene {
         text: 'Schlag auf Schlag entsteht hier das Werkzeug der Bauern. Ohne das Eisen des Schmieds gäbe es keine Ernte.',
       });
 
-      // 3. Hufeisen- & Pfluglager
+      // Hufeisen- & Pfluglager
       const lagerX = left + w - 65;
       addDomTag(lagerX, top + 85, '🌾 Pflugsech-Lager', 'rgba(35,25,10,0.92)', '#d97706', '#fef3c7');
       this.hotspots.push({
@@ -319,7 +366,14 @@ export class InteriorScene extends Phaser.Scene {
       });
     } else {
       // zunftstube_rathaus
-      // 1. Zunftwaage
+      // 1. Mentor: Ratsherr Jakob
+      this.spawnInteriorMentor(cx + 40, top + 64, 'npc_jakob', 'npc_jakob-idle-down');
+
+      // 2. Fackeln
+      this.spawnAnimatedProp(left + 28, top + 36, 'interior-wall-torch', 12, 1.0);
+      this.spawnAnimatedProp(left + w - 28, top + 36, 'interior-wall-torch', 12, 1.0);
+
+      // Zunftwaage
       addDomTag(cx, top + 42, '⚖️ Zunft- & Silberwaage', 'rgba(35,25,10,0.95)', '#f59e0b', '#fef08a');
       this.hotspots.push({
         id: 'hs_waage',
@@ -335,7 +389,7 @@ export class InteriorScene extends Phaser.Scene {
         },
       });
 
-      // 2. Münztisch & Kölner Denare
+      // Münztisch & Kölner Denare
       const muenzX = left + 65;
       addDomTag(muenzX, top + 85, '🪙 Münztisch (Denare)', 'rgba(30,25,40,0.92)', '#a855f7', '#f3e8ff');
       this.hotspots.push({
@@ -352,7 +406,7 @@ export class InteriorScene extends Phaser.Scene {
         },
       });
 
-      // 3. Zunftlade & Privilegien
+      // Zunftlade & Privilegien
       const ladeX = left + w - 65;
       addDomTag(ladeX, top + 85, '📜 Zunftordnung & Siegel', 'rgba(40,15,10,0.92)', '#ef4444', '#fee2e2');
       this.hotspots.push({
@@ -381,6 +435,28 @@ export class InteriorScene extends Phaser.Scene {
     }
   }
 
+  private spawnInteriorMentor(x: number, y: number, texKey: string, idleAnim: string): void {
+    if (this.textures.exists(texKey)) {
+      this.mentorSprite = this.physics.add.sprite(x, y, texKey, 0);
+      this.mentorSprite.setOrigin(0.5, 0.9);
+      this.mentorSprite.setScale(1.0);
+      this.mentorSprite.setDepth(15);
+      if (this.anims.exists(idleAnim)) {
+        this.mentorSprite.play(idleAnim, true);
+      }
+    }
+  }
+
+  private spawnAnimatedProp(x: number, y: number, animKey: string, depth = 10, scale = 1.0): void {
+    if (this.anims.exists(animKey)) {
+      const spr = this.add.sprite(x, y, animKey);
+      spr.play(animKey, true);
+      spr.setDepth(depth);
+      spr.setScale(scale);
+      this.animProps.push(spr);
+    }
+  }
+
   public update(time: number, delta: number): void {
     if (this.isExiting) return;
 
@@ -395,11 +471,35 @@ export class InteriorScene extends Phaser.Scene {
 
     this.player.setVelocity(vx, vy);
 
+    this.player.setFlipX(false);
+    const g = gameState.gender;
     if (vx !== 0 || vy !== 0) {
+      if (Math.abs(vx) > Math.abs(vy)) {
+        this.facing = vx > 0 ? 'right' : 'left';
+      } else {
+        this.facing = vy > 0 ? 'down' : 'up';
+      }
+      const aKey = this.anims.exists(`walk-${g}-${this.facing}`)
+        ? `walk-${g}-${this.facing}`
+        : `walk-${this.facing}`;
+      this.player.play(aKey, true);
+
       this.stepCooldown -= delta;
       if (this.stepCooldown <= 0) {
         sound.step('stone');
         this.stepCooldown = 280;
+      }
+    } else {
+      const idleKey = `idle-${g}-${this.facing}`;
+      if (this.anims.exists(idleKey)) {
+        this.player.play(idleKey, true);
+      } else {
+        this.player.stop();
+        if (this.facing === 'down') this.player.setFrame(0);
+        else if (this.facing === 'right') this.player.setFrame(17);
+        else if (this.facing === 'up') this.player.setFrame(34);
+        else if (this.facing === 'left') this.player.setFrame(51);
+        else this.player.setFrame(0);
       }
     }
 

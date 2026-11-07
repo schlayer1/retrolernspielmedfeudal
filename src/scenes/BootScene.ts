@@ -15,10 +15,47 @@ export class BootScene extends Phaser.Scene {
     this.load.image('cliffs_desert', '/assets/world/cliffs_desert.png');
     this.load.image('Overworld', '/assets/gfx/Overworld.png');
 
-    // 2. Main 16x32 Character Spritesheet
+    // 2. Main 16x32 Character Spritesheets (Male & Female Steinzeit Benchmark)
     this.load.spritesheet('character', '/assets/gfx/character.png', {
       frameWidth: 16,
       frameHeight: 32,
+    });
+    this.load.spritesheet('character_female', '/assets/gfx/character_female.png', {
+      frameWidth: 16,
+      frameHeight: 32,
+    });
+
+    // 2b. Native 16x32 LPC Mentor Spritesheets (Steinzeit / Mana Benchmark)
+    const mentorKeys = ['meier', 'walther', 'anselm', 'wolfram', 'eberhard', 'hartmut', 'jakob', 'arnold'];
+    for (const mk of mentorKeys) {
+      this.load.spritesheet(`npc_${mk}`, `/assets/gfx/npcs/npc_${mk}.png`, {
+        frameWidth: 16,
+        frameHeight: 32,
+      });
+    }
+
+    // 2c. 16-Bit SNES Authentic Interior Rooms
+    this.load.image('interior_store_smithy_day', '/assets/props/interior_store_smithy_day.png');
+    this.load.image('interior_guild_library_day', '/assets/props/interior_guild_library_day.png');
+    this.load.image('interior_tavern_day', '/assets/props/interior_tavern_day.png');
+    this.load.image('interior_alchemist_day', '/assets/props/interior_alchemist_day.png');
+
+    // 2d. Interior Animated Strips
+    this.load.spritesheet('interior_wall_torch_strip', '/assets/animations/interior_wall_torch_strip.png', {
+      frameWidth: 24,
+      frameHeight: 24,
+    });
+    this.load.spritesheet('interior_hearth_fire_strip', '/assets/animations/interior_hearth_fire_strip.png', {
+      frameWidth: 48,
+      frameHeight: 44,
+    });
+    this.load.spritesheet('interior_forge_strip', '/assets/animations/interior_forge_strip.png', {
+      frameWidth: 34,
+      frameHeight: 36,
+    });
+    this.load.spritesheet('farm_campfire_strip', '/assets/animations/farm_campfire_strip.png', {
+      frameWidth: 24,
+      frameHeight: 24,
     });
 
     // 3. Keep 48x64 Character Sheets (Idle down 4 frames, Walk down 6 frames)
@@ -148,71 +185,10 @@ export class BootScene extends Phaser.Scene {
   }
 
   create(): void {
-    this.createFemaleCharacterSheet();
     this.createAnimations();
     this.extractPreviewImages();
     this.scene.start('WorldScene');
     this.scene.start('UIScene');
-  }
-
-  private createFemaleCharacterSheet(): void {
-    try {
-      const srcImg = this.textures.get('character').getSourceImage() as HTMLImageElement;
-      const w = srcImg.width;
-      const h = srcImg.height;
-      const canvas = document.createElement('canvas');
-      canvas.width = w;
-      canvas.height = h;
-      const ctx = canvas.getContext('2d')!;
-      ctx.drawImage(srcImg, 0, 0);
-
-      const imgData = ctx.getImageData(0, 0, w, h);
-      const d = imgData.data;
-      for (let i = 0; i < d.length; i += 4) {
-        const r = d[i];
-        const g = d[i + 1];
-        const b = d[i + 2];
-        const a = d[i + 3];
-        if (a > 128 && r > 130 && r > g * 1.45 && r > b * 1.45) {
-          d[i] = Math.min(255, Math.round(b * 0.9 + 25));
-          d[i + 1] = Math.min(255, Math.round(r * 0.68));
-          d[i + 2] = Math.min(255, Math.round(r * 1.05));
-        }
-      }
-      ctx.putImageData(imgData, 0, 0);
-
-      for (let row = 0; row < 4; row++) {
-        for (let col = 0; col < 4; col++) {
-          const fx = col * 16;
-          const fy = row * 32;
-          ctx.fillStyle = '#f2c94c';
-          ctx.fillRect(fx + 5, fy + 9, 6, 1);
-          ctx.fillStyle = '#5a3420';
-          if (row === 0 || row === 2) {
-            ctx.fillRect(fx + 2, fy + 14, 2, 6);
-            ctx.fillRect(fx + 12, fy + 14, 2, 6);
-            ctx.fillStyle = '#f2c94c';
-            ctx.fillRect(fx + 2, fy + 19, 1, 1);
-            ctx.fillRect(fx + 13, fy + 19, 1, 1);
-          } else if (row === 1) {
-            ctx.fillRect(fx + 2, fy + 13, 2, 7);
-            ctx.fillStyle = '#f2c94c';
-            ctx.fillRect(fx + 2, fy + 19, 1, 1);
-          } else if (row === 3) {
-            ctx.fillRect(fx + 12, fy + 13, 2, 7);
-            ctx.fillStyle = '#f2c94c';
-            ctx.fillRect(fx + 13, fy + 19, 1, 1);
-          }
-        }
-      }
-
-      this.textures.addSpriteSheet('character_female', canvas as unknown as HTMLImageElement, {
-        frameWidth: 16,
-        frameHeight: 32,
-      });
-    } catch {
-      // Fallback if texture manipulation fails
-    }
   }
 
   private extractPreviewImages(): void {
@@ -304,6 +280,88 @@ export class BootScene extends Phaser.Scene {
         key: 'dog-idle',
         frames: this.anims.generateFrameNumbers('farm_dog_idle', { start: 0, end: 7 }),
         frameRate: 4,
+        repeat: -1,
+      });
+    }
+
+    // =========================================================================
+    // 8 Medieval Mentors 16x32 Animations (Steinzeit / Mana Benchmark)
+    // =========================================================================
+    const mentorKeys = ['meier', 'walther', 'anselm', 'wolfram', 'eberhard', 'hartmut', 'jakob', 'arnold'];
+    for (const mk of mentorKeys) {
+      const tex = `npc_${mk}`;
+      if (this.textures.exists(tex)) {
+        const mDirs = [
+          { name: 'down', start: 0 },
+          { name: 'right', start: 4 },
+          { name: 'up', start: 8 },
+          { name: 'left', start: 12 },
+        ];
+        for (const { name, start } of mDirs) {
+          if (!this.anims.exists(`${tex}-walk-${name}`)) {
+            this.anims.create({
+              key: `${tex}-walk-${name}`,
+              frames: this.anims.generateFrameNumbers(tex, { start, end: start + 3 }),
+              frameRate: 6,
+              repeat: -1,
+            });
+          }
+          if (!this.anims.exists(`${tex}-idle-${name}`)) {
+            this.anims.create({
+              key: `${tex}-idle-${name}`,
+              frames: [{ key: tex, frame: start }],
+              frameRate: 1,
+            });
+          }
+        }
+        if (!this.anims.exists(`${tex}-idle-down`)) {
+          this.anims.create({
+            key: `${tex}-idle-down`,
+            frames: [
+              { key: tex, frame: 0 },
+              { key: tex, frame: 1 },
+              { key: tex, frame: 0 },
+              { key: tex, frame: 0 },
+            ],
+            frameRate: 2,
+            repeat: -1,
+          });
+        }
+      }
+    }
+
+    // =========================================================================
+    // Interior Fire, Forge & Torch Animations
+    // =========================================================================
+    if (this.textures.exists('interior_wall_torch_strip') && !this.anims.exists('interior-wall-torch')) {
+      this.anims.create({
+        key: 'interior-wall-torch',
+        frames: this.anims.generateFrameNumbers('interior_wall_torch_strip', { start: 0, end: 3 }),
+        frameRate: 8,
+        repeat: -1,
+      });
+    }
+    if (this.textures.exists('interior_hearth_fire_strip') && !this.anims.exists('interior-hearth-fire')) {
+      this.anims.create({
+        key: 'interior-hearth-fire',
+        frames: this.anims.generateFrameNumbers('interior_hearth_fire_strip', { start: 0, end: 11 }),
+        frameRate: 10,
+        repeat: -1,
+      });
+    }
+    if (this.textures.exists('interior_forge_strip') && !this.anims.exists('interior-forge-fire')) {
+      this.anims.create({
+        key: 'interior-forge-fire',
+        frames: this.anims.generateFrameNumbers('interior_forge_strip', { start: 0, end: 11 }),
+        frameRate: 10,
+        repeat: -1,
+      });
+    }
+    if (this.textures.exists('farm_campfire_strip') && !this.anims.exists('farm-campfire')) {
+      this.anims.create({
+        key: 'farm-campfire',
+        frames: this.anims.generateFrameNumbers('farm_campfire_strip', { start: 0, end: 7 }),
+        frameRate: 8,
         repeat: -1,
       });
     }
