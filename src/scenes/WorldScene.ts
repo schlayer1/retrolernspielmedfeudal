@@ -1927,12 +1927,17 @@ export class WorldScene extends Phaser.Scene {
     }
 
     if (this.activeTarget.id === 'dorf_wassermuehle' || this.activeTarget.id === 'acker_windmill_tower') {
-      sound.questStep();
-      gameState.addInventory('mehl_sack', 2);
-      if (gameState.chapter === 5) gameState.setObjectiveProgress(5, 1, true);
-      this.spawnFloatingText(this.activeTarget.x, this.activeTarget.y - 16, '+2 Roggenmehl', '#fde68a');
       const win = window as any;
-      if (win.__showToast) win.__showToast('⚙️ Die Mühle mahlt das Korn zu feinem Mehl (+2 Roggenmehl)!');
+      if ((gameState.inventory.roggen_saat || 0) >= 1) {
+        gameState.removeInventory('roggen_saat', 1);
+        gameState.addInventory('mehl_sack', 2);
+        sound.questStep();
+        this.spawnFloatingText(this.activeTarget.x, this.activeTarget.y - 16, '+2 Roggenmehl', '#fde68a');
+        if (win.__showToast) win.__showToast('⚙️ Das Mühlrad mahlt dein Roggenkorn zu feinem Mehl (+2 Roggenmehl)!');
+      } else {
+        sound.click();
+        if (win.__showToast) win.__showToast('⚠️ Kein Roggen im Beutel! Ernte Roggen am Salland-Beet oder frage Meier Heinrich.');
+      }
       return;
     }
 

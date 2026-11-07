@@ -170,6 +170,10 @@ export class BootScene extends Phaser.Scene {
       'farm_hay_rick_pile',
       'farm_animal_enclosure',
       'farm_plow_shelter',
+      'cauldron',
+      'table_food',
+      'table_map',
+      'chairs_and_desks',
     ];
     for (const p of props) {
       this.load.image(p, `/assets/props/${p}.png`);

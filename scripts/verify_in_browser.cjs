@@ -135,6 +135,13 @@ async function main() {
     await page.keyboard.press('Escape');
     await sleep(400);
 
+    // 6b. Build Modal ([B]) - Chapter & Quest Gating
+    await page.keyboard.press('KeyB');
+    await sleep(600);
+    await saveScreenshot(page, 'verify_6b_build_modal.png');
+    await page.keyboard.press('Escape');
+    await sleep(400);
+
     // 7. Progressive 2-Column Lexicon Modal ([L] - 27 entries)
     await page.keyboard.press('KeyL');
     await sleep(600);
@@ -184,6 +191,11 @@ async function main() {
       }
     });
     await sleep(900);
+    // Walk up towards throne & mentor so dynamic proximity prompt triggers
+    await page.keyboard.down('KeyW');
+    await sleep(400);
+    await page.keyboard.up('KeyW');
+    await sleep(300);
     await saveScreenshot(page, 'verify_11_interior_scene.png');
 
     console.log('Errors:', errors.length);

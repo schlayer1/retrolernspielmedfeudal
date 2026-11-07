@@ -117,6 +117,7 @@ export const RESOURCE_NODES: ResourceNode[] = [
   { id: 'node_iron_2', name: 'Eisenmine am Burgfelsen (Rohes Eisenerz abbauen)', x: 8 * 16, y: 26 * 16, item: 'eisenerz', amount: 2, respawnTime: 18000, spriteKey: 'rock_big_a', scale: 0.75 },
 
   // 4. Ackerernte, Heu, Obst & Schafwolle
+  { id: 'node_crop_village_rye', name: 'Salland-Roggenbeet (Korn ernten)', x: 22 * 16, y: 52 * 16, item: 'roggen_saat', amount: 3, respawnTime: 15000, spriteKey: 'crop_wheat_4', scale: 1.0 },
   { id: 'node_crop_winter', name: 'Winterfrucht (Roggen ernten)', x: 72 * 16, y: 62 * 16, item: 'roggen_saat', amount: 3, respawnTime: 15000, spriteKey: 'crop_wheat_4', scale: 1.0 },
   { id: 'node_crop_sommer', name: 'Sommerfrucht (Hafer ernten)', x: 82 * 16, y: 62 * 16, item: 'hafer_saat', amount: 3, respawnTime: 15000, spriteKey: 'crop_wheat_4', scale: 1.0 },
   { id: 'node_hay_meadow', name: 'Allmendewiese (Heu gabeln)', x: 64 * 16, y: 66 * 16, item: 'heuballen', amount: 2, respawnTime: 16000, spriteKey: 'hay_bale', scale: 1.0 },

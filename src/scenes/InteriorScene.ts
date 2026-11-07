@@ -1,8 +1,7 @@
 import Phaser from 'phaser';
 import { gameState } from '../systems/GameState';
 import { sound } from '../audio/sound';
-import { STATIONS } from '../data/stations';
-import { MEDIEVAL_RELICS } from '../data/relics';
+import { MEDIEVAL_CHAPTERS, ChapterData } from '../data/chapters';
 
 export type InteriorRoomId =
   | 'burgsaal_palas'
@@ -26,6 +25,7 @@ interface Hotspot {
   id: string;
   x: number;
   y: number;
+  radius: number;
   label: string;
   speaker: string;
   text: string;
@@ -45,14 +45,17 @@ export class InteriorScene extends Phaser.Scene {
     ESC: Phaser.Input.Keyboard.Key;
   };
   private hotspots: Hotspot[] = [];
+  private propSprites: Phaser.GameObjects.Sprite[] = [];
+  private animProps: Phaser.GameObjects.Sprite[] = [];
   private exitMat!: { x: number; y: number; w: number; h: number };
   private isExiting = false;
+  private enterCooldownMs = 800;
   private stepCooldown = 0;
   private domOverlay?: HTMLDivElement;
+  private promptEl?: HTMLDivElement;
 
   private facing: 'down' | 'up' | 'left' | 'right' = 'down';
-  private mentorSprite: Phaser.GameObjects.Sprite | null = null;
-  private animProps: Phaser.GameObjects.Sprite[] = [];
+  private mentorSprite: Phaser.Physics.Arcade.Sprite | null = null;
 
   constructor() {
     super({ key: 'InteriorScene' });
@@ -69,8 +72,10 @@ export class InteriorScene extends Phaser.Scene {
       returnY: data?.returnY ?? 32 * 16,
     };
     this.hotspots = [];
+    this.propSprites = [];
     this.animProps = [];
     this.isExiting = false;
+    this.enterCooldownMs = 800;
   }
 
   public create(): void {
@@ -83,6 +88,7 @@ export class InteriorScene extends Phaser.Scene {
 
     this.cameras.main.setBackgroundColor('#0d0805');
 
+    // Remove any leftover overlay
     document.getElementById('interior-dom-overlay')?.remove();
     const overlay = document.createElement('div');
     overlay.id = 'interior-dom-overlay';
@@ -91,31 +97,31 @@ export class InteriorScene extends Phaser.Scene {
     document.body.appendChild(overlay);
     this.domOverlay = overlay;
 
-    const addDomTag = (
-      rx: number,
-      ry: number,
-      text: string,
-      bg = 'rgba(28,18,10,0.92)',
-      border = '#d4af37',
-      color = '#fef08a'
-    ) => {
-      const el = document.createElement('div');
-      const pctX = (rx / 480) * 100;
-      const pctY = (ry / 270) * 100;
-      el.style.cssText = `
-        position:absolute;left:${pctX}%;top:${pctY}%;transform:translate(-50%,-50%);
-        background:${bg};border:1.5px solid ${border};color:${color};
-        padding:2px 8px;border-radius:999px;font-size:11px;font-weight:800;
-        white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,0.7);
-      `;
-      el.textContent = text;
-      overlay.appendChild(el);
-    };
+    // Room Header Badge (top center)
+    const headerTag = document.createElement('div');
+    headerTag.style.cssText = `
+      position:absolute;left:50%;top:14px;transform:translateX(-50%);
+      background:rgba(20,12,6,0.96);border:1.5px solid #f59e0b;color:#fef08a;
+      padding:4px 14px;border-radius:999px;font-size:12px;font-weight:800;
+      white-space:nowrap;box-shadow:0 3px 10px rgba(0,0,0,0.8);letter-spacing:0.3px;
+    `;
+    headerTag.textContent = `🏛️ ${this.initData.title}`;
+    overlay.appendChild(headerTag);
 
-    // Header Tag
-    addDomTag(240, 16, `🏛️ ${this.initData.title}`, 'rgba(20,12,6,0.95)', '#f59e0b', '#fff');
+    // Dynamic Single Proximity Prompt (hidden until near something)
+    const promptEl = document.createElement('div');
+    promptEl.id = 'interior-prompt';
+    promptEl.style.cssText = `
+      position:absolute;display:none;transform:translate(-50%,-100%);
+      background:rgba(20,12,6,0.96);border:1.5px solid #d4af37;color:#fef08a;
+      padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;
+      white-space:nowrap;box-shadow:0 4px 12px rgba(0,0,0,0.85);z-index:30;
+      pointer-events:none;animation:pulsePrompt 1.4s infinite ease-in-out;
+    `;
+    overlay.appendChild(promptEl);
+    this.promptEl = promptEl;
 
-    // Controls
+    // Controls setup
     if (this.input.keyboard) {
       this.cursors = this.input.keyboard.createCursorKeys();
       this.wasd = {
@@ -128,7 +134,7 @@ export class InteriorScene extends Phaser.Scene {
       };
     }
 
-    // 1. Authentic 16-bit SNES Room Background
+    // 1. Authentic SNES Room Background Texture
     const bgTex = this.getRoomBackgroundTexture(this.initData.roomId);
     if (this.textures.exists(bgTex)) {
       const bgImg = this.add.image(CX, CY, bgTex);
@@ -136,13 +142,12 @@ export class InteriorScene extends Phaser.Scene {
       bgImg.setDisplaySize(ROOM_W, ROOM_H);
       bgImg.setDepth(1);
     } else {
-      // Fallback wooden floor
       const g = this.add.graphics();
       g.fillStyle(0x3a2416, 1.0);
       g.fillRect(LEFT, TOP, ROOM_W, ROOM_H);
     }
 
-    // Wall & border shadow
+    // Room gold accent border
     const shadowG = this.add.graphics();
     shadowG.lineStyle(2, 0xd4af37, 0.85);
     shadowG.strokeRect(LEFT, TOP, ROOM_W, ROOM_H);
@@ -156,22 +161,21 @@ export class InteriorScene extends Phaser.Scene {
     exitG.lineStyle(1.5, 0xfbbf24, 1.0);
     exitG.strokeRect(this.exitMat.x - 24, this.exitMat.y - 10, 48, 20);
     exitG.setDepth(5);
-    addDomTag(this.exitMat.x, this.exitMat.y, '🚪 Auszug [E / S]', 'rgba(28,18,10,0.92)', '#f59e0b', '#fde68a');
 
-    // Build specific room props & animated fires/torches
-    this.buildRoom(this.initData.roomId || 'burgsaal_palas', LEFT, TOP, ROOM_W, ROOM_H, addDomTag);
+    // 2. Build tangible physics props, animated fires & mentor
+    this.buildRoom(this.initData.roomId || 'burgsaal_palas', LEFT, TOP, ROOM_W, ROOM_H);
 
-    // Spawn Player (16x32 Steinzeit Benchmark)
+    // 3. Spawn Player at safe distance from exit (54px away from mat)
     const charKey =
       gameState.gender === 'female' && this.textures.exists('character_female')
         ? 'character_female'
         : 'character';
-    this.player = this.physics.add.sprite(CX, TOP + ROOM_H - 36, charKey, 0);
+    this.player = this.physics.add.sprite(CX, TOP + ROOM_H - 54, charKey, 0);
     this.player.setOrigin(0.5, 0.9);
     this.player.setScale(1.0);
     this.player.setDepth(20);
     this.player.setCollideWorldBounds(true);
-    this.physics.world.setBounds(LEFT + 12, TOP + 32, ROOM_W - 24, ROOM_H - 42);
+    this.physics.world.setBounds(LEFT + 14, TOP + 32, ROOM_W - 28, ROOM_H - 44);
 
     this.cameras.main.setBounds(0, 0, 480, 270);
     this.cameras.main.centerOn(240, 135);
@@ -195,228 +199,401 @@ export class InteriorScene extends Phaser.Scene {
     }
   }
 
-  private buildRoom(
-    roomId: InteriorRoomId,
-    left: number,
-    top: number,
-    w: number,
-    h: number,
-    addDomTag: Function
+  private spawnProp(
+    x: number,
+    y: number,
+    key: string,
+    scale = 1.0,
+    depth = 10,
+    originX = 0.5,
+    originY = 0.9
+  ): Phaser.GameObjects.Sprite | null {
+    if (this.textures.exists(key)) {
+      const spr = this.add.sprite(x, y, key);
+      spr.setOrigin(originX, originY);
+      spr.setScale(scale);
+      spr.setDepth(depth);
+      this.propSprites.push(spr);
+      return spr;
+    }
+    return null;
+  }
+
+  private registerHotspot(
+    id: string,
+    x: number,
+    y: number,
+    radius: number,
+    label: string,
+    speaker: string,
+    text: string,
+    action?: () => void
   ): void {
+    this.hotspots.push({ id, x, y, radius, label, speaker, text, action });
+  }
+
+  private buildRoom(roomId: InteriorRoomId, left: number, top: number, w: number, h: number): void {
     const cx = left + w / 2;
 
     if (roomId === 'burgsaal_palas') {
-      // 1. Mentor: Graf Eberhard im Palas
-      this.spawnInteriorMentor(cx + 40, top + 64, 'npc_eberhard', 'npc_eberhard-idle-down');
+      // 1. Mentor: Graf Eberhard von Steinfels
+      this.spawnInteriorMentor(cx + 42, top + 64, 'npc_eberhard', 'npc_eberhard-idle-down');
+      this.registerHotspot(
+        'hs_eberhard',
+        cx + 42,
+        top + 64,
+        42,
+        '💬 [E] Graf Eberhard ansprechen',
+        'Graf Eberhard von Steinfels',
+        'Willkommen in meinem Palas! Als Lehnsherr garantiere ich Schutz und Schirm, doch fordere ich unbedingte Lehnstreue von allen Vasallen.',
+        () => {
+          const ch4 = MEDIEVAL_CHAPTERS.find((c) => c.id === 4);
+          if (ch4 && typeof (window as any).__openMentorDialog === 'function') {
+            (window as any).__openMentorDialog(ch4);
+          } else {
+            this.showDialog('Graf Eberhard von Steinfels', 'Das Lehnswesen bindet Kaiser, Fürst und Vasall durch ewigen Treueid!');
+          }
+        }
+      );
 
-      // 2. Kaminfeuer animiert
+      // 2. Thron des Grafen
+      this.spawnProp(cx, top + 52, 'royal_throne_gold', 1.15, 8);
+      this.registerHotspot(
+        'hs_thron',
+        cx,
+        top + 52,
+        40,
+        '👑 [E] Grafenthron untersuchen',
+        'Grafenthron von Steinfels',
+        'Von diesem geschnitzten Eichenthron leitet Graf Eberhard die Lehnsgerichte. Hier schwören die Vasallen den Lehnseid auf das Evangelienbuch.'
+      );
+
+      // 3. Kaminfeuer animiert
       this.spawnAnimatedProp(left + 54, top + 52, 'interior-hearth-fire', 12, 1.0);
+      this.registerHotspot(
+        'hs_kamin',
+        left + 54,
+        top + 52,
+        40,
+        '🔥 [E] Palas-Kamin betrachten',
+        'Burgkamin',
+        'Der Palas war das einzige dauerhaft beheizte Wohngebäude der Burg – der Sitz des Grafen und seiner Familie in kalten Wintern.'
+      );
 
-      // 3. Fackeln an den Wänden
+      // 4. Wandfackeln
       this.spawnAnimatedProp(left + 28, top + 36, 'interior-wall-torch', 12, 1.0);
       this.spawnAnimatedProp(left + w - 28, top + 36, 'interior-wall-torch', 12, 1.0);
 
-      // Thron des Grafen Eberhard
-      addDomTag(cx, top + 42, '👑 Grafenthron & Kamin', 'rgba(45,20,10,0.95)', '#f59e0b', '#fef08a');
-      this.hotspots.push({
-        id: 'hs_thron',
-        x: cx,
-        y: top + 46,
-        label: 'Grafenthron von Steinfels',
-        speaker: 'Graf Eberhard',
-        text: 'Von diesem Thron aus leite ich die Lehnsgerichte. Das Lehnswesen bindet Fürst und Vasall durch ewigen Treueid!',
-      });
-
-      // Kaminfeuer
-      const kaminX = left + 54;
-      addDomTag(kaminX, top + 44, '🔥 Palas-Kamin', 'rgba(40,15,5,0.92)', '#ea580c', '#fdba74');
-      this.hotspots.push({
-        id: 'hs_kamin',
-        x: kaminX,
-        y: top + 48,
-        label: 'Kaminfeuer',
-        speaker: 'Burgkamin',
-        text: 'Der Palas war das einzige dauerhaft beheizte Wohngebäude der Burg – der Sitz des Grafen und seiner Familie.',
-      });
-
-      // Rüstungsständer
-      const ruestX = left + w - 50;
-      addDomTag(ruestX, top + 44, '🛡️ Ritterrüstung', 'rgba(25,25,35,0.92)', '#94a3b8', '#f8fafc');
-      this.hotspots.push({
-        id: 'hs_ruestung',
-        x: ruestX,
-        y: top + 48,
-        label: 'Turnierharnisch',
-        speaker: 'Ritter Wolfram',
-        text: 'Topfhelm, Kettenhemd und Heroldsschild: Die Ausrüstung eines Ritters wog über 25 Kilogramm und kostete ein Vermögen.',
-        action: () => {
+      // 5. Ritterrüstung & Harnisch
+      this.spawnProp(left + w - 48, top + 56, 'knight_armor_suit', 1.15, 8);
+      this.registerHotspot(
+        'hs_ruestung',
+        left + w - 48,
+        top + 56,
+        42,
+        '🛡️ [E] Ritterharnisch prüfen (Station)',
+        'Ritter Wolfram',
+        'Topfhelm, Kettenhemd und Heroldsschild: Die Ausrüstung eines Ritters wog über 25 Kilogramm und kostete ein Vermögen.',
+        () => {
           if (typeof (window as any).__openStation === 'function') {
             (window as any).__openStation('station_ruestkammer');
           }
-        },
-      });
+        }
+      );
 
-      // Prunktafel
-      addDomTag(cx, top + 110, '🍷 Rittersaal-Tafel', 'rgba(30,18,10,0.9)', '#d4af37', '#fef3c7');
-      this.hotspots.push({
-        id: 'hs_tafel',
-        x: cx,
-        y: top + 114,
-        label: 'Festtafel',
-        speaker: 'Dame Mechthild',
-        text: 'Nach der Jagd und auf Turnieren speisen hier die Vasallen. Minnesänger tragen ihre Lieder vor.',
-      });
+      // 6. Waffenständer
+      this.spawnProp(left + w - 84, top + 56, 'weapon_rack_new', 1.0, 8);
+      this.registerHotspot(
+        'hs_waffen',
+        left + w - 84,
+        top + 56,
+        38,
+        '⚔️ [E] Waffenständer betrachten',
+        'Waffenkammer',
+        'Lanzen, Turnierschwerter und Schilde mit dem Wappen von Steinfels – bereit für Wehr und Turnier.'
+      );
+
+      // 7. Schatzlade / Lehnsurkunde
+      this.spawnProp(left + 82, top + 56, 'castle_chest_wood', 1.0, 8);
+      this.registerHotspot(
+        'hs_urkunde',
+        left + 82,
+        top + 56,
+        40,
+        '📜 [E] Lehnsurkunde einsehen (Relikt)',
+        'Schatzlade des Grafen',
+        'Hier liegen die besiegelten Lehnsverträge und Zehntregister der Grafschaft Steinfels.',
+        () => {
+          if (typeof (window as any).__openArtifactInspector === 'function') {
+            (window as any).__openArtifactInspector('relic_lehnsurkunde');
+          }
+        }
+      );
+
+      // 8. Rittersaal-Tafel
+      this.spawnProp(cx - 30, top + 115, 'table_food', 1.05, 8);
+      this.registerHotspot(
+        'hs_tafel',
+        cx - 30,
+        top + 115,
+        42,
+        '🍷 [E] Festtafel betrachten',
+        'Dame Mechthild',
+        'Nach der Jagd und auf Turnieren speisen hier die Vasallen. Minnesänger tragen ihre Lieder bei Met und Braten vor.'
+      );
+
     } else if (roomId === 'klosterapotheke_skriptorium') {
       // 1. Mentor: Bruder Anselm
-      this.spawnInteriorMentor(cx + 40, top + 64, 'npc_anselm', 'npc_anselm-idle-down');
+      this.spawnInteriorMentor(cx - 10, top + 66, 'npc_anselm', 'npc_anselm-idle-down');
+      this.registerHotspot(
+        'hs_anselm',
+        cx - 10,
+        top + 66,
+        42,
+        '💬 [E] Bruder Anselm ansprechen',
+        'Bruder Anselm',
+        'Pax vobiscum! Nach der Benediktsregel leben wir im Kloster: "Ora et labora" – Bete und arbeite!',
+        () => {
+          const ch3 = MEDIEVAL_CHAPTERS.find((c) => c.id === 3);
+          if (ch3 && typeof (window as any).__openMentorDialog === 'function') {
+            (window as any).__openMentorDialog(ch3);
+          } else {
+            this.showDialog('Bruder Anselm', 'Wir bewahren das antike Heilwissen und schreiben heilige Schriften von Hand ab.');
+          }
+        }
+      );
 
-      // 2. Fackeln & Licht
-      this.spawnAnimatedProp(left + 28, top + 36, 'interior-wall-torch', 12, 1.0);
-      this.spawnAnimatedProp(left + w - 28, top + 36, 'interior-wall-torch', 12, 1.0);
+      // 2. Skriptorium-Pult
+      this.spawnProp(cx - 54, top + 56, 'monastery_scriptorium_desk', 1.15, 8);
+      this.registerHotspot(
+        'hs_skriptorium',
+        cx - 54,
+        top + 56,
+        40,
+        '📜 [E] Skriptorium untersuchen',
+        'Schreibpult des Skriptoriums',
+        'Mit Gänsekiel und Gallustinte schreiben die Mönche Bibeln und Chroniken auf mühsam geglättetes Pergament.'
+      );
 
-      // Skriptorium-Pult
-      addDomTag(cx, top + 42, '📜 Skriptorium & Kodizes', 'rgba(20,25,35,0.95)', '#38bdf8', '#e0f2fe');
-      this.hotspots.push({
-        id: 'hs_skriptorium',
-        x: cx,
-        y: top + 46,
-        label: 'Schreibpult des Skriptoriums',
-        speaker: 'Bruder Anselm',
-        text: 'Mit Gänsekiel und Gallustinte schreiben wir das Wort Gottes und antike Schriften auf Kalbspergament ab.',
-        action: () => {
+      // 3. Buchpult & Klosterkodex
+      this.spawnProp(cx + 28, top + 56, 'monastery_book_lectern', 1.15, 8);
+      this.registerHotspot(
+        'hs_kodex',
+        cx + 28,
+        top + 56,
+        42,
+        '📖 [E] Klosterkodex aufschlagen (Relikt)',
+        'Illuminierter Klosterkodex',
+        'Ein prachtvoll illuminiertes Evangeliar mit Blattgold-Initialen und Lapislazuli-Pigmenten.',
+        () => {
           if (typeof (window as any).__openArtifactInspector === 'function') {
             (window as any).__openArtifactInspector('relic_codex');
           }
-        },
-      });
+        }
+      );
 
-      // Kräutermörser
-      const krautX = left + 60;
-      addDomTag(krautX, top + 50, '🌿 Arznei-Mörser', 'rgba(15,35,20,0.92)', '#10b981', '#a7f3d0');
-      this.hotspots.push({
-        id: 'hs_apotheke',
-        x: krautX,
-        y: top + 54,
-        label: 'Klosterapotheke',
-        speaker: 'Infirmar Anselm',
-        text: 'Hier zerstoßen wir Thymian, Ringelblume und Bienenwachs zu Wundsalben nach Hildegard von Bingen.',
-        action: () => {
+      // 4. Gebetsaltar
+      this.spawnProp(left + 50, top + 54, 'monastery_altar_shrine', 1.0, 8);
+      this.registerHotspot(
+        'hs_altar',
+        left + 50,
+        top + 54,
+        38,
+        '🕯️ [E] Gebetsaltar betrachten',
+        'Klosteraltar',
+        'Achtmal am Tag versammeln sich die Mönche zum Stundengebet – vom Morgengebet (Laudes) bis zur Nacht (Komplet).'
+      );
+
+      // 5. Arznei-Kräuterbeet & Mörser
+      this.spawnProp(left + w - 48, top + 64, 'monastery_herbal_planter', 1.05, 8);
+      this.registerHotspot(
+        'hs_kraeuter',
+        left + w - 48,
+        top + 64,
+        42,
+        '🌿 [E] Heilkräuter mörsern (Station)',
+        'Klosterapotheke',
+        'Hier zerstoßen wir Thymian, Ringelblume und Salbei zu Wundsalben nach Hildegard von Bingen.',
+        () => {
           if (typeof (window as any).__openStation === 'function') {
             (window as any).__openStation('station_kraeuter');
           }
-        },
-      });
+        }
+      );
 
-      // Bibliotheksregal
-      const bibX = left + w - 60;
-      addDomTag(bibX, top + 50, '📚 Klosterbibliothek', 'rgba(35,25,15,0.92)', '#d97706', '#fde68a');
-      this.hotspots.push({
-        id: 'hs_bib',
-        x: bibX,
-        y: top + 54,
-        label: 'Bibliothek',
-        speaker: 'Abt Benedikt',
-        text: '"Ein Kloster ohne Bibliothek ist wie eine Festung ohne Rüstkammer." Wir hüten das Wissen des Abendlandes.',
-      });
-    } else if (roomId === 'dorfschmiede_hufeisen') {
-      // 1. Mentor: Baumeister Arnold / Dorfschmied
-      this.spawnInteriorMentor(cx + 40, top + 64, 'npc_arnold', 'npc_arnold-idle-down');
+      // 6. Kräuterkessel
+      this.spawnProp(left + w - 84, top + 68, 'cauldron', 1.0, 8);
+      this.registerHotspot(
+        'hs_kessel',
+        left + w - 84,
+        top + 68,
+        38,
+        '🧪 [E] Salbenkessel betrachten',
+        'Salbenkessel',
+        'Im Kessel wird Bienenwachs aus der Kloster-Imkerei erwärmt, um heilende Balsame abzufüllen.'
+      );
 
-      // 2. Schmiedeesse Esse / Rennofen animiert
-      this.spawnAnimatedProp(left + 60, top + 54, 'interior-forge-fire', 12, 1.0);
-
-      // Esse & Rennofen
-      addDomTag(cx, top + 42, '🔥 Rennofen & Schmiedeesse', 'rgba(45,15,5,0.95)', '#ea580c', '#fed7aa');
-      this.hotspots.push({
-        id: 'hs_esse',
-        x: cx,
-        y: top + 46,
-        label: 'Schmiedeesse',
-        speaker: 'Schmiedemeister Kunz',
-        text: 'Im Holzkohlenfeuer glüht das Eisen bei über 1.000 Grad! Hier schmiede ich Pflugmesser, Äxte und Hufeisen.',
-      });
-
-      // Amboss
-      const ambossX = left + 65;
-      addDomTag(ambossX, top + 85, '⚒️ Meisteramboss', 'rgba(30,30,35,0.92)', '#94a3b8', '#f1f5f9');
-      this.hotspots.push({
-        id: 'hs_amboss',
-        x: ambossX,
-        y: top + 89,
-        label: 'Amboss',
-        speaker: 'Schmiedeamboss',
-        text: 'Schlag auf Schlag entsteht hier das Werkzeug der Bauern. Ohne das Eisen des Schmieds gäbe es keine Ernte.',
-      });
-
-      // Hufeisen- & Pfluglager
-      const lagerX = left + w - 65;
-      addDomTag(lagerX, top + 85, '🌾 Pflugsech-Lager', 'rgba(35,25,10,0.92)', '#d97706', '#fef3c7');
-      this.hotspots.push({
-        id: 'hs_lager',
-        x: lagerX,
-        y: top + 89,
-        label: 'Pfluglager',
-        speaker: 'Bauer Walther',
-        text: 'Das eiserne Pflugmesser schnitt dichte Wurzelböden senkrecht auf – der Kern der mittelalterlichen Agrarrevolution.',
-        action: () => {
-          if (typeof (window as any).__openArtifactInspector === 'function') {
-            (window as any).__openArtifactInspector('relic_pflugmesser');
-          }
-        },
-      });
-    } else {
-      // zunftstube_rathaus
-      // 1. Mentor: Ratsherr Jakob
-      this.spawnInteriorMentor(cx + 40, top + 64, 'npc_jakob', 'npc_jakob-idle-down');
-
-      // 2. Fackeln
+      // 7. Wandfackeln
       this.spawnAnimatedProp(left + 28, top + 36, 'interior-wall-torch', 12, 1.0);
       this.spawnAnimatedProp(left + w - 28, top + 36, 'interior-wall-torch', 12, 1.0);
 
-      // Zunftwaage
-      addDomTag(cx, top + 42, '⚖️ Zunft- & Silberwaage', 'rgba(35,25,10,0.95)', '#f59e0b', '#fef08a');
-      this.hotspots.push({
-        id: 'hs_waage',
-        x: cx,
-        y: top + 46,
-        label: 'Eichwaage der Stadt',
-        speaker: 'Kaufmann Godeke',
-        text: 'Stadtluft macht frei nach Jahr und Tag! Die Zünfte wachen streng über Maße, Gewichte und Tuchqualitäten.',
-        action: () => {
-          if (typeof (window as any).__openStation === 'function') {
-            (window as any).__openStation('station_zunft_waage');
+    } else if (roomId === 'dorfschmiede_hufeisen') {
+      // 1. Mentor: Baumeister Arnold / Schmied
+      this.spawnInteriorMentor(cx + 40, top + 68, 'npc_arnold', 'npc_arnold-idle-down');
+      this.registerHotspot(
+        'hs_arnold',
+        cx + 40,
+        top + 68,
+        42,
+        '💬 [E] Baumeister Arnold ansprechen',
+        'Baumeister Arnold',
+        'Eisen und Stein sind das Fundament jeder Burg und jedes Pflugs! Ohne gutes Werkzeug verkümmert das Land.',
+        () => {
+          const ch5 = MEDIEVAL_CHAPTERS.find((c) => c.id === 5);
+          if (ch5 && typeof (window as any).__openMentorDialog === 'function') {
+            (window as any).__openMentorDialog(ch5);
+          } else {
+            this.showDialog('Baumeister Arnold', 'Der Schmied ist der angesehenste Handwerker im Dorf – er liefert Pflugmesser und Waffen.');
           }
-        },
-      });
+        }
+      );
 
-      // Münztisch & Kölner Denare
-      const muenzX = left + 65;
-      addDomTag(muenzX, top + 85, '🪙 Münztisch (Denare)', 'rgba(30,25,40,0.92)', '#a855f7', '#f3e8ff');
-      this.hotspots.push({
-        id: 'hs_muenzen',
-        x: muenzX,
-        y: top + 89,
-        label: 'Münztisch',
-        speaker: 'Münzmeister',
-        text: '240 Silberpfennige ergeben ein ganzes Pfund Silber. Münzgeld löste den Tauschhandel im Hochmittelalter ab.',
-        action: () => {
+      // 2. Schmiedeesse / Rennofen animiert
+      this.spawnAnimatedProp(left + 60, top + 54, 'interior-forge-fire', 12, 1.0);
+      this.registerHotspot(
+        'hs_esse',
+        left + 60,
+        top + 54,
+        40,
+        '🔥 [E] Schmiedeesse & Rennofen betrachten',
+        'Schmiedeesse',
+        'Im Holzkohlenfeuer glüht das Eisen bei über 1.000 Grad! Hier schmelzen wir Raseneisenerz zu schmiedbarem Eisen.'
+      );
+
+      // 3. Meisteramboss (Interaktives Schmieden!)
+      this.spawnProp(cx - 32, top + 75, 'anvil', 1.25, 8);
+      this.registerHotspot(
+        'hs_amboss',
+        cx - 32,
+        top + 75,
+        44,
+        '⚒️ [E] Meisteramboss nutzen (Schmieden)',
+        'Dorfamboss',
+        'Schlag auf Schlag entsteht hier das Werkzeug der Bauern. Ohne das Eisen des Schmieds gäbe es keine Agrarrevolution!',
+        () => {
+          if (typeof (window as any).__toggleModal === 'function') {
+            (window as any).__toggleModal('C');
+          }
+        }
+      );
+
+      // 4. Holzlager
+      this.spawnProp(left + 45, top + 105, 'woodpile', 1.0, 8);
+      this.registerHotspot(
+        'hs_holz',
+        left + 45,
+        top + 105,
+        38,
+        '🪵 [E] Holzlager untersuchen',
+        'Holzlager',
+        'Trockenes Eichen- und Buchenholz für das Essefeuer und für stabile Holzgriffe der Werkzeuge.'
+      );
+
+      // 5. Waffen- & Werkzeugständer
+      this.spawnProp(left + w - 50, top + 60, 'weapon_rack_new', 1.0, 8);
+      this.registerHotspot(
+        'hs_werkzeug',
+        left + w - 50,
+        top + 60,
+        38,
+        '⚔️ [E] Werkzeuge & Waffen prüfen',
+        'Werkzeugständer',
+        'Sensen, Sicheln, eiserne Hauen und Hufeisen, frisch geschmiedet für die Feldarbeit.'
+      );
+
+      // 6. Pflugmesser-Lager (Relikt)
+      this.spawnProp(left + w - 50, top + 105, 'castle_chest_wood', 1.0, 8);
+      this.registerHotspot(
+        'hs_pflugrelic',
+        left + w - 50,
+        top + 105,
+        42,
+        '🌾 [E] Pflugsech einsehen (Relikt)',
+        'Pfluglager',
+        'Das eiserne Pflugmesser schnitt dichte Wurzelböden senkrecht auf – der Schlüssel zu Rekordernten im Hochmittelalter.',
+        () => {
+          if (typeof (window as any).__openArtifactInspector === 'function') {
+            (window as any).__openArtifactInspector('relic_pflugmesser');
+          }
+        }
+      );
+
+    } else {
+      // zunftstube_rathaus
+      // 1. Mentor: Ratsherr Jakob
+      this.spawnInteriorMentor(cx + 10, top + 68, 'npc_jakob', 'npc_jakob-idle-down');
+      this.registerHotspot(
+        'hs_jakob',
+        cx + 10,
+        top + 68,
+        42,
+        '💬 [E] Ratsherr Jakob ansprechen',
+        'Ratsherr Jakob von Köln',
+        'Stadtluft macht frei nach Jahr und Tag! Hinter den Stadtmauern schützt das Stadtrecht die Freiheit der Kaufleute und Handwerker.',
+        () => {
+          const ch8 = MEDIEVAL_CHAPTERS.find((c) => c.id === 8);
+          if (ch8 && typeof (window as any).__openMentorDialog === 'function') {
+            (window as any).__openMentorDialog(ch8);
+          } else {
+            this.showDialog('Ratsherr Jakob', 'Die Zünfte regeln Ausbildung, Preise und Meisterstücke in der Stadt streng.');
+          }
+        }
+      );
+
+      // 2. Ratstisch & Stadtkarte
+      this.spawnProp(cx - 30, top + 62, 'table_map', 1.15, 8);
+      this.registerHotspot(
+        'hs_ratstisch',
+        cx - 30,
+        top + 62,
+        40,
+        '⚖️ [E] Ratstisch & Stadtplan einsehen',
+        'Ratstisch der Bürger',
+        'Hier tagt der Rat der freien Stadt. Sie entscheiden über Marktordnungen, Stadtmauern und das Münzrecht.'
+      );
+
+      // 3. Zunftbank & Schreibpulte
+      this.spawnProp(left + w - 55, top + 65, 'chairs_and_desks', 1.0, 8);
+      this.registerHotspot(
+        'hs_zunftbank',
+        left + w - 55,
+        top + 65,
+        40,
+        '📜 [E] Zunftordnung studieren',
+        'Zunftschreibstube',
+        'In den Zunftbüchern ist festgeschrieben: Wer das Meisterstück nicht vorweist, darf keine eigene Werkstatt eröffnen!'
+      );
+
+      // 4. Stadtkasse & Silberdenare (Relikt)
+      this.spawnProp(left + 50, top + 56, 'castle_chest_wood', 1.0, 8);
+      this.registerHotspot(
+        'hs_silber',
+        left + 50,
+        top + 56,
+        42,
+        '🪙 [E] Silberdenare zählen (Relikt)',
+        'Stadtkasse (Kölner Denare)',
+        '240 Silberpfennige ergeben ein ganzes Pfund Feinsilber. Münzgeld verdrängte den Naturalientausch.',
+        () => {
           if (typeof (window as any).__openArtifactInspector === 'function') {
             (window as any).__openArtifactInspector('relic_silberdenar');
           }
-        },
-      });
+        }
+      );
 
-      // Zunftlade & Privilegien
-      const ladeX = left + w - 65;
-      addDomTag(ladeX, top + 85, '📜 Zunftordnung & Siegel', 'rgba(40,15,10,0.92)', '#ef4444', '#fee2e2');
-      this.hotspots.push({
-        id: 'hs_privilegien',
-        x: ladeX,
-        y: top + 89,
-        label: 'Zunftlade',
-        speaker: 'Zunftmeister',
-        text: 'In der Zunftlade liegen die kaiserlichen Stadtrechte und Marktprivilegien verschlossen.',
-      });
+      // 5. Wandfackeln
+      this.spawnAnimatedProp(left + 28, top + 36, 'interior-wall-torch', 12, 1.0);
+      this.spawnAnimatedProp(left + w - 28, top + 36, 'interior-wall-torch', 12, 1.0);
     }
   }
 
@@ -459,6 +636,10 @@ export class InteriorScene extends Phaser.Scene {
 
   public update(time: number, delta: number): void {
     if (this.isExiting) return;
+
+    if (this.enterCooldownMs > 0) {
+      this.enterCooldownMs -= delta;
+    }
 
     let vx = 0;
     let vy = 0;
@@ -503,9 +684,18 @@ export class InteriorScene extends Phaser.Scene {
       }
     }
 
-    // Check exit
+    // 1. Check Exit Mat Proximity & Exit Trigger
     const distToExit = Phaser.Math.Distance.Between(this.player.x, this.player.y, this.exitMat.x, this.exitMat.y);
-    if (distToExit < 24) {
+    const isAtExitMat = distToExit < 24 && this.player.y >= this.exitMat.y - 14;
+
+    if (isAtExitMat && this.enterCooldownMs <= 0) {
+      if (this.promptEl) {
+        this.promptEl.style.display = 'block';
+        this.promptEl.style.left = `${(this.exitMat.x / 480) * 100}%`;
+        this.promptEl.style.top = `${((this.exitMat.y - 18) / 270) * 100}%`;
+        this.promptEl.textContent = '🚪 [E / S] Raum verlassen';
+      }
+
       if (this.wasd?.E && Phaser.Input.Keyboard.JustDown(this.wasd.E)) {
         this.exitToOverworld();
         return;
@@ -514,25 +704,46 @@ export class InteriorScene extends Phaser.Scene {
         this.exitToOverworld();
         return;
       }
+      return;
     }
 
-    // Check Hotspots with [E]
-    if (this.wasd?.E && Phaser.Input.Keyboard.JustDown(this.wasd.E)) {
-      for (const hs of this.hotspots) {
-        const d = Phaser.Math.Distance.Between(this.player.x, this.player.y, hs.x, hs.y);
-        if (d < 36) {
-          sound.playClick();
-          if (hs.action) {
-            hs.action();
-          } else {
-            this.showDialog(hs.speaker, hs.text);
-          }
-          return;
-        }
+    // 2. Check Nearest Interactive Hotspot
+    let nearestHotspot: Hotspot | null = null;
+    let minDistance = 999;
+
+    for (const hs of this.hotspots) {
+      const d = Phaser.Math.Distance.Between(this.player.x, this.player.y, hs.x, hs.y);
+      if (d < hs.radius && d < minDistance) {
+        minDistance = d;
+        nearestHotspot = hs;
       }
     }
 
-    if (this.wasd?.ESC && Phaser.Input.Keyboard.JustDown(this.wasd.ESC)) {
+    if (nearestHotspot) {
+      if (this.promptEl) {
+        this.promptEl.style.display = 'block';
+        this.promptEl.style.left = `${(nearestHotspot.x / 480) * 100}%`;
+        this.promptEl.style.top = `${((nearestHotspot.y - 20) / 270) * 100}%`;
+        this.promptEl.textContent = nearestHotspot.label;
+      }
+
+      if (this.wasd?.E && Phaser.Input.Keyboard.JustDown(this.wasd.E)) {
+        sound.click();
+        if (nearestHotspot.action) {
+          nearestHotspot.action();
+        } else {
+          this.showDialog(nearestHotspot.speaker, nearestHotspot.text);
+        }
+        return;
+      }
+    } else {
+      if (this.promptEl) {
+        this.promptEl.style.display = 'none';
+      }
+    }
+
+    // 3. ESC exits room safely after cooldown
+    if (this.wasd?.ESC && Phaser.Input.Keyboard.JustDown(this.wasd.ESC) && this.enterCooldownMs <= 0) {
       this.exitToOverworld();
     }
   }

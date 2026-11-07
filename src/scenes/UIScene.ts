@@ -328,6 +328,7 @@ export class UIScene extends Phaser.Scene {
     const roleDef = MEDIEVAL_ROLES.find((r) => r.id === gameState.role) || MEDIEVAL_ROLES[0];
     const steps = gameState.getQuestStepProgress(curCh.id);
     const allDone = gameState.checkQuest(curCh.id);
+    const activeStepIdx = steps.findIndex((s) => !s.done);
 
     const taskText = allDone
       ? `Alle Aufgaben gemeistert! Sprich mit ${curCh.mentor.name} für das Lehns-Quiz (E).`
@@ -346,14 +347,30 @@ export class UIScene extends Phaser.Scene {
           <div style="margin-bottom:4px;">📋 <strong>Aufgabe:</strong> ${taskText}</div>
           <div class="quest-steps-list" style="margin:4px 0;">
             ${steps
-              .map(
-                (s) => `
-              <div class="quest-step-item ${s.done ? 'step-done' : ''}" style="display:flex;align-items:center;gap:5px;font-size:11px;color:${s.done ? '#86efac' : '#fef3c7'};">
-                <span>${s.done ? '✅' : '⬜'}</span>
-                <span style="${s.done ? 'text-decoration:line-through;opacity:0.85;' : ''}">${s.label}</span>
-              </div>
-            `
-              )
+              .map((s, idx) => {
+                if (s.done) {
+                  return `
+                    <div class="quest-step-item step-done" style="display:flex;align-items:center;gap:6px;font-size:11px;color:#86efac;">
+                      <span>✅</span>
+                      <span style="text-decoration:line-through;opacity:0.85;">${s.label}</span>
+                    </div>
+                  `;
+                }
+                if (idx === activeStepIdx) {
+                  return `
+                    <div class="quest-step-item step-active" style="display:flex;align-items:center;gap:6px;font-size:11px;color:#fde047;background:rgba(217,119,6,0.22);padding:2px 6px;border-radius:4px;border:1px solid #d97706;font-weight:700;">
+                      <span>⏳</span>
+                      <span>${s.label}</span>
+                    </div>
+                  `;
+                }
+                return `
+                  <div class="quest-step-item step-locked" style="display:flex;align-items:center;gap:6px;font-size:10.5px;color:#94a3b8;opacity:0.65;">
+                    <span>🔒</span>
+                    <span>Aufgabe ${idx + 1}: Noch nicht freigeschaltet (Erst vorherige Aufgabe abschließen)</span>
+                  </div>
+                `;
+              })
               .join('')}
           </div>
           <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;margin-top:4px;">
@@ -744,7 +761,13 @@ export class UIScene extends Phaser.Scene {
       } else {
         // Mark Step 0 complete!
         gameState.setObjectiveProgress(ch.id, 0, true);
-        this.showToast(`✅ Aufgabe 1/4 erfüllt! Erforsche nun den Hof und folge dem Kompass.`);
+        if (ch.id === 1 && !gameState.storyFlags['meier_seeds_given']) {
+          gameState.storyFlags['meier_seeds_given'] = true;
+          gameState.addInventory('roggen_saat', 2);
+          this.showToast('🌾 Meier Heinrich: "Nimm diese 2x Roggen-Saat! Mahle sie an der Mühle oder mit [C] zu Mehl!"');
+        } else {
+          this.showToast(`✅ Aufgabe 1/4 erfüllt! Erforsche nun den Hof und folge dem Kompass.`);
+        }
         this.closeModal();
       }
     }
@@ -1110,21 +1133,27 @@ export class UIScene extends Phaser.Scene {
         </div>
         <div class="craft-list">
           ${MEDIEVAL_BUILDINGS.map((b) => {
-            const isBuilt = gameState.builtBuildings.has(b.id);
-            const canBuild = !isBuilt && gameState.hasItems(b.cost);
+            const check = gameState.canBuildBuilding(b.id);
+            const isBuilt = check.isBuilt;
+            const canBuild = check.allowed;
+            const isCurrentOrPast = b.chapter <= gameState.chapter;
             return `
-              <div class="recipe-card ${isBuilt ? 'built' : canBuild ? '' : 'disabled'}">
+              <div class="recipe-card ${isBuilt ? 'built' : canBuild ? '' : 'disabled'}" style="${!isCurrentOrPast ? 'opacity:0.6;' : ''}">
                 <div class="recipe-info">
-                  <strong>${b.title} ${isBuilt ? '✓ (Errichtet)' : ''}</strong>
+                  <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px;">
+                    <strong>${b.title} ${isBuilt ? '✓ (Errichtet)' : ''}</strong>
+                    <span style="font-size:10px;padding:1px 6px;border-radius:4px;background:#3b2416;color:#fde68a;border:1px solid #78350f;">Kapitel ${b.chapter}</span>
+                  </div>
                   <p>${b.description}</p>
                   <div class="cost-row">
                     ${isBuilt ? 'Bereits in der Spielwelt verankert' : `Kosten: ${Object.entries(b.cost).map(([k, v]) => `${v}x ${MEDIEVAL_ITEMS[k as MedievalItemId]?.name || k}`).join(', ')}`}
                   </div>
+                  ${!isBuilt && !canBuild ? `<div style="font-size:11px;color:#f87171;margin-top:4px;">⚠️ ${check.lockedReason}</div>` : ''}
                 </div>
                 ${
                   isBuilt
                     ? '<span class="badge-done">Errichtet</span>'
-                    : `<button class="btn-craft ${canBuild ? '' : 'disabled'}" data-id="${b.id}">Errichten</button>`
+                    : `<button class="btn-craft ${canBuild ? '' : 'disabled'}" data-id="${b.id}" ${canBuild ? '' : 'disabled'}>${canBuild ? 'Errichten' : 'Gesperrt'}</button>`
                 }
               </div>
             `;

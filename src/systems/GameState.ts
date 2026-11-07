@@ -95,16 +95,12 @@ export class GameState {
   }
 
   private initDefaultInventory(): void {
+    // Authentischer Spielstart ohne Vorrats-Überfluss:
+    // Der Spieler besitzt zu Beginn nur 1 Wegzehrung (Dorfbrot).
+    // Alle Baustoffe (Bauholz, Bruchstein, Erz), Saaten und Mehl
+    // müssen in der Spielwelt selbst erwirtschaftet oder verarbeitet werden!
     this.inventory = {
-      brot_fladen: 2,
-      mehl_sack: 2,
-      roggen_saat: 4,
-      hafer_saat: 2,
-      heuballen: 3,
-      holz_balken: 3,
-      feldstein: 2,
-      eisenerz: 2,
-      wasser_eimer: 2,
+      brot_fladen: 1,
     };
   }
 
@@ -297,17 +293,125 @@ export class GameState {
     return true;
   }
 
-  public build(buildingId: string): boolean {
+  public canBuildBuilding(buildingId: string): {
+    allowed: boolean;
+    isBuilt: boolean;
+    lockedReason?: string;
+    missingItems?: string[];
+  } {
     const b = MEDIEVAL_BUILDINGS.find((x) => x.id === buildingId);
-    if (!b) return false;
-    if (this.builtBuildings.has(buildingId)) return false;
-    if (!this.hasItems(b.cost)) return false;
+    if (!b) return { allowed: false, isBuilt: false, lockedReason: 'Unbekanntes Bauwerk' };
+    const isBuilt = this.builtBuildings.has(buildingId);
+    if (isBuilt) return { allowed: false, isBuilt: true, lockedReason: 'Bereits errichtet' };
+
+    // 1. Kapitel-Gating
+    if (b.chapter > this.chapter) {
+      return {
+        allowed: false,
+        isBuilt: false,
+        lockedReason: `Freischaltung erst ab Kapitel ${b.chapter}!`,
+      };
+    }
+
+    // 2. Quest-Schritt-Gating innerhalb des Kapitels
+    const progress = this.chapterObjectives[b.chapter] || [false, false, false, false];
+    if (b.chapter === 1) {
+      // Hof-Viehgatter ist Schritt 4 (Index 3) -> benötigt Schritte 0, 1, 2
+      if (!progress[0] || !progress[1] || !progress[2]) {
+        return {
+          allowed: false,
+          isBuilt: false,
+          lockedReason: 'Quest-Sperre: Erfülle erst Aufgaben 1-3 (Heinrich sprechen, Falko streicheln, Brot backen)!',
+        };
+      }
+    } else if (b.chapter === 2) {
+      if (!progress[0] || !progress[1] || !progress[2]) {
+        return {
+          allowed: false,
+          isBuilt: false,
+          lockedReason: 'Quest-Sperre: Birg und schmiede zuerst das Pflugmesser!',
+        };
+      }
+    } else if (b.chapter === 3) {
+      if (!progress[0] || !progress[1] || !progress[2]) {
+        return {
+          allowed: false,
+          isBuilt: false,
+          lockedReason: 'Quest-Sperre: Untersuche erst die Arznei und den Klosterkodex!',
+        };
+      }
+    } else if (b.chapter === 5) {
+      if (b.id === 'waffenstaender' && !progress[0]) {
+        return {
+          allowed: false,
+          isBuilt: false,
+          lockedReason: 'Quest-Sperre: Sprich zuerst mit Baumeister Arnold!',
+        };
+      }
+      if (b.id === 'hurde_burgtor' && (!progress[0] || !this.builtBuildings.has('waffenstaender'))) {
+        return {
+          allowed: false,
+          isBuilt: false,
+          lockedReason: 'Quest-Sperre: Errichte zuerst den Waffenständer der Burg!',
+        };
+      }
+    } else if (b.chapter === 7) {
+      if (b.id === 'turnier_schranke' && !progress[0]) {
+        return {
+          allowed: false,
+          isBuilt: false,
+          lockedReason: 'Quest-Sperre: Sprich zuerst mit Dame Mechthild!',
+        };
+      }
+      if (b.id === 'marktstand_tuch' && (!progress[0] || !this.builtBuildings.has('turnier_schranke'))) {
+        return {
+          allowed: false,
+          isBuilt: false,
+          lockedReason: 'Quest-Sperre: Errichte zuerst die Turnierschranke!',
+        };
+      }
+    } else if (b.chapter === 8) {
+      if (b.id === 'gerichtseiche_bank' && (!progress[0] || !progress[1])) {
+        return {
+          allowed: false,
+          isBuilt: false,
+          lockedReason: 'Quest-Sperre: Verhandle zuerst vor dem Stadtgericht!',
+        };
+      }
+    }
+
+    // 3. Rohstoff-Bedarf prüfen
+    const missing: string[] = [];
+    for (const [k, v] of Object.entries(b.cost)) {
+      const cur = this.inventory[k as MedievalItemId] || 0;
+      if (cur < (v || 0)) {
+        missing.push(`${(v || 0) - cur}x ${MEDIEVAL_ITEMS[k as MedievalItemId]?.name || k}`);
+      }
+    }
+
+    if (missing.length > 0) {
+      return {
+        allowed: false,
+        isBuilt: false,
+        lockedReason: `Fehlende Baustoffe: ${missing.join(', ')}`,
+        missingItems: missing,
+      };
+    }
+
+    return { allowed: true, isBuilt: false };
+  }
+
+  public build(buildingId: string): boolean {
+    const status = this.canBuildBuilding(buildingId);
+    if (!status.allowed) return false;
+    const b = MEDIEVAL_BUILDINGS.find((x) => x.id === buildingId)!;
     for (const [k, v] of Object.entries(b.cost)) {
       this.removeInventory(k as MedievalItemId, v || 0);
     }
     this.builtBuildings.add(buildingId);
     this.safety = Math.min(100, this.safety + 8);
     this.knowledge = Math.min(100, this.knowledge + 4);
+    this.syncChapterObjectives();
     this.notify();
     return true;
   }

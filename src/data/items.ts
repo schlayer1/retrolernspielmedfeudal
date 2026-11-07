@@ -219,7 +219,7 @@ export const MEDIEVAL_RECIPES: MedievalRecipe[] = [
     resultAmount: 1,
     cost: { eisen_barren: 2, holz_balken: 1 },
     description: 'Schmiede in der Dorfesse ein stabiles Messer aus Geschmiedetem Eisen für den schweren Wendepflug.',
-    minChapter: 1,
+    minChapter: 2,
   },
   {
     id: 'klostersalbe_ruehren',
@@ -228,7 +228,7 @@ export const MEDIEVAL_RECIPES: MedievalRecipe[] = [
     resultAmount: 2,
     cost: { lehnssiegel_wachs: 1, wasser_eimer: 1 },
     description: 'Zerreibe Heilkräuter im Steinmörser und vermenge sie mit warmem Bienenwachs.',
-    minChapter: 1,
+    minChapter: 3,
   },
   {
     id: 'pergament_herstellen',
@@ -237,7 +237,7 @@ export const MEDIEVAL_RECIPES: MedievalRecipe[] = [
     resultAmount: 2,
     cost: { wollballen: 1, wasser_eimer: 1 },
     description: 'Weiche Tierhaut in Kalkwasser ein, schabe sie glatt und trockne sie auf dem Spannrahmen fürs Skriptorium.',
-    minChapter: 1,
+    minChapter: 3,
   },
   {
     id: 'hufeisen_schmieden',
@@ -246,7 +246,7 @@ export const MEDIEVAL_RECIPES: MedievalRecipe[] = [
     resultAmount: 2,
     cost: { eisen_barren: 1 },
     description: 'Schmiede aus Geschmiedetem Eisen passgenaue Hufeisen für das Streitross von Ritter Wolfram.',
-    minChapter: 1,
+    minChapter: 6,
   },
   {
     id: 'wappenschild_fertigen',
@@ -255,7 +255,7 @@ export const MEDIEVAL_RECIPES: MedievalRecipe[] = [
     resultAmount: 1,
     cost: { holz_balken: 2, eisen_barren: 1 },
     description: 'Verleime Lindenholzbretter und ziehe Eisenbeschläge auf für den Schildknappen.',
-    minChapter: 1,
+    minChapter: 6,
   },
 ];
 
