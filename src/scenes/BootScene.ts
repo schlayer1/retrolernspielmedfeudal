@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { gameState } from '../systems/GameState';
 
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -147,27 +148,147 @@ export class BootScene extends Phaser.Scene {
   }
 
   create(): void {
+    this.createFemaleCharacterSheet();
     this.createAnimations();
+    this.extractPreviewImages();
     this.scene.start('WorldScene');
     this.scene.start('UIScene');
   }
 
+  private createFemaleCharacterSheet(): void {
+    try {
+      const srcImg = this.textures.get('character').getSourceImage() as HTMLImageElement;
+      const w = srcImg.width;
+      const h = srcImg.height;
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d')!;
+      ctx.drawImage(srcImg, 0, 0);
+
+      const imgData = ctx.getImageData(0, 0, w, h);
+      const d = imgData.data;
+      for (let i = 0; i < d.length; i += 4) {
+        const r = d[i];
+        const g = d[i + 1];
+        const b = d[i + 2];
+        const a = d[i + 3];
+        if (a > 128 && r > 130 && r > g * 1.45 && r > b * 1.45) {
+          d[i] = Math.min(255, Math.round(b * 0.9 + 25));
+          d[i + 1] = Math.min(255, Math.round(r * 0.68));
+          d[i + 2] = Math.min(255, Math.round(r * 1.05));
+        }
+      }
+      ctx.putImageData(imgData, 0, 0);
+
+      for (let row = 0; row < 4; row++) {
+        for (let col = 0; col < 4; col++) {
+          const fx = col * 16;
+          const fy = row * 32;
+          ctx.fillStyle = '#f2c94c';
+          ctx.fillRect(fx + 5, fy + 9, 6, 1);
+          ctx.fillStyle = '#5a3420';
+          if (row === 0 || row === 2) {
+            ctx.fillRect(fx + 2, fy + 14, 2, 6);
+            ctx.fillRect(fx + 12, fy + 14, 2, 6);
+            ctx.fillStyle = '#f2c94c';
+            ctx.fillRect(fx + 2, fy + 19, 1, 1);
+            ctx.fillRect(fx + 13, fy + 19, 1, 1);
+          } else if (row === 1) {
+            ctx.fillRect(fx + 2, fy + 13, 2, 7);
+            ctx.fillStyle = '#f2c94c';
+            ctx.fillRect(fx + 2, fy + 19, 1, 1);
+          } else if (row === 3) {
+            ctx.fillRect(fx + 12, fy + 13, 2, 7);
+            ctx.fillStyle = '#f2c94c';
+            ctx.fillRect(fx + 13, fy + 19, 1, 1);
+          }
+        }
+      }
+
+      this.textures.addSpriteSheet('character_female', canvas as unknown as HTMLImageElement, {
+        frameWidth: 16,
+        frameHeight: 32,
+      });
+    } catch {
+      // Fallback if texture manipulation fails
+    }
+  }
+
+  private extractPreviewImages(): void {
+    const toDataUrl = (texKey: string, sx = 0, sy = 0, sw = 16, sh = 32): string => {
+      try {
+        const src = this.textures.get(texKey).getSourceImage() as HTMLImageElement | HTMLCanvasElement;
+        const c = document.createElement('canvas');
+        c.width = sw;
+        c.height = sh;
+        const ctx = c.getContext('2d')!;
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(src, sx, sy, sw, sh, 0, 0, sw, sh);
+        return c.toDataURL();
+      } catch {
+        return '';
+      }
+    };
+
+    gameState.malePreviewUrl = toDataUrl('character', 0, 0, 16, 32);
+    gameState.femalePreviewUrl = toDataUrl('character_female', 0, 0, 16, 32) || gameState.malePreviewUrl;
+  }
+
   private createAnimations(): void {
-    // 16x32 LPC Player Animations
-    const lpc = (key: string, start: number) => {
-      if (!this.anims.exists(key)) {
+    // 16x32 LPC Player Animations for Male & Female
+    const dirs = [
+      { name: 'down', start: 0 },
+      { name: 'right', start: 17 },
+      { name: 'up', start: 34 },
+      { name: 'left', start: 51 },
+    ];
+
+    dirs.forEach(({ name, start }) => {
+      // Male / default
+      if (!this.anims.exists(`walk-${name}`)) {
         this.anims.create({
-          key,
+          key: `walk-${name}`,
           frames: this.anims.generateFrameNumbers('character', { start, end: start + 3 }),
           frameRate: 8,
           repeat: -1,
         });
       }
-    };
-    lpc('walk-down', 0);
-    lpc('walk-right', 17);
-    lpc('walk-up', 34);
-    lpc('walk-left', 51);
+      if (!this.anims.exists(`walk-male-${name}`)) {
+        this.anims.create({
+          key: `walk-male-${name}`,
+          frames: this.anims.generateFrameNumbers('character', { start, end: start + 3 }),
+          frameRate: 8,
+          repeat: -1,
+        });
+      }
+      if (!this.anims.exists(`idle-male-${name}`)) {
+        this.anims.create({
+          key: `idle-male-${name}`,
+          frames: [{ key: 'character', frame: start }],
+          frameRate: 1,
+        });
+      }
+
+      // Female
+      if (this.textures.exists('character_female')) {
+        if (!this.anims.exists(`walk-female-${name}`)) {
+          this.anims.create({
+            key: `walk-female-${name}`,
+            frames: this.anims.generateFrameNumbers('character_female', { start, end: start + 3 }),
+            frameRate: 8,
+            repeat: -1,
+          });
+        }
+        if (!this.anims.exists(`idle-female-${name}`)) {
+          this.anims.create({
+            key: `idle-female-${name}`,
+            frames: [{ key: 'character_female', frame: start }],
+            frameRate: 1,
+          });
+        }
+      }
+    });
 
     // Dog Animations
     if (!this.anims.exists('dog-walk') && this.textures.exists('farm_dog_walk')) {

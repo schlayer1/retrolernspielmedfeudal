@@ -577,11 +577,11 @@ export class UIScene extends Phaser.Scene {
               <label>2. Figur wählen:</label>
               <div class="gender-btn-group">
                 <button class="role-btn ${gameState.gender === 'male' ? 'active' : ''}" id="btn-gender-male">
-                  <img src="/assets/characters/keep_squire.png" style="width:20px;height:40px;image-rendering:pixelated;vertical-align:middle;margin-right:6px;" />
+                  <img src="${gameState.malePreviewUrl || '/assets/characters/keep_squire.png'}" style="width:20px;height:40px;image-rendering:pixelated;vertical-align:middle;margin-right:6px;" />
                   👦 Konrad (Knappe)
                 </button>
                 <button class="role-btn ${gameState.gender === 'female' ? 'active' : ''}" id="btn-gender-female">
-                  <img src="/assets/characters/keep_peasant_f.png" style="width:20px;height:40px;image-rendering:pixelated;vertical-align:middle;margin-right:6px;" />
+                  <img src="${gameState.femalePreviewUrl || '/assets/characters/keep_peasant_f.png'}" style="width:20px;height:40px;image-rendering:pixelated;vertical-align:middle;margin-right:6px;" />
                   👧 Mathilda (Bäuerin)
                 </button>
               </div>
@@ -643,6 +643,7 @@ export class UIScene extends Phaser.Scene {
       }
       btnMale.classList.add('active');
       btnFemale?.classList.remove('active');
+      (this.scene.get('WorldScene') as any)?.refreshCharacterAppearance?.();
     });
     btnFemale?.addEventListener('click', () => {
       gameState.gender = 'female';
@@ -652,6 +653,7 @@ export class UIScene extends Phaser.Scene {
       }
       btnFemale.classList.add('active');
       btnMale?.classList.remove('active');
+      (this.scene.get('WorldScene') as any)?.refreshCharacterAppearance?.();
     });
 
     // Roles selection
